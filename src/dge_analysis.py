@@ -21,74 +21,13 @@ except ImportError:
     print("Error: 'pysam' module is required. Please install it via pip install pysam")
     sys.exit(1)
 
+from umi_utils import cluster_umis
+from h5ad_export import export_h5ad
+from path_layout import barcode_dir, expression_dir, stats_dir
+
 def load_config(yaml_file):
     with open(yaml_file, 'r') as f:
         return yaml.safe_load(f)
-
-def cluster_umis(umis, threshold=1):
-    """
-    Optimized UMI clustering using hash-based neighbor search.
-    Complexity: O(N * L) instead of O(N^2).
-    """
-    if not umis:
-        return {}
-    
-    counts = Counter()
-    if isinstance(umis, (dict, Counter)):
-        counts.update(umis)
-    else:
-        counts.update(umis)
-    
-    # 2. Sort unique UMIs: descending count, then lexicographical
-    # This ensures we always map lower-count/variant UMIs to higher-count/canonical ones
-    unique_umis = sorted(counts.keys(), key=lambda x: (-counts[x], x))
-    
-    parent_map = {u: u for u in unique_umis}
-    
-    # Optimization: If threshold is 0, no clustering needed
-    if threshold == 0:
-        return parent_map
-        
-    # Set for fast lookup of valid UMIs
-    umi_set = set(unique_umis)
-    
-    # We only mark children as 'visited' so they don't become parents
-    # But in the sorted loop, once a child is merged, we can skip processing it as a parent?
-    # Yes. 'visited' tracks UMIs that have been assigned to a parent.
-    visited = set()
-
-    bases = {'A', 'C', 'G', 'T', 'N'}
-
-    for parent in unique_umis:
-        if parent in visited:
-            continue
-            
-        # Parent is valid. Now look for children.
-        # Instead of iterating all other UMIs, generate neighbors.
-        
-        parent_len = len(parent)
-        parent_count = counts[parent]
-        
-        # Generate all 1-mismatch neighbors
-        # For L=10, there are 30 neighbors (excluding Ns logic, say max 40)
-        neighbors = set()
-        p_chars = list(parent)
-        
-        for i in range(parent_len):
-            orig = p_chars[i]
-            for b in bases:
-                if b == orig: continue
-                p_chars[i] = b
-                neighbors.add("".join(p_chars))
-            p_chars[i] = orig # Restore
-            
-        # Check which neighbors are in our dataset
-        for child in neighbors:
-            if child in umi_set and child not in visited:
-                parent_map[child] = parent
-                visited.add(child)
-
-    return parent_map
 
 def process_barcode_worker(args):
     """
@@ -315,7 +254,7 @@ def load_barcodes(out_dir, project):
                     barcodes.append(parts[0])
     else:
         # 2. Fallback to Kept Barcodes (Analysis Dir)
-        kept_file = os.path.join(out_dir, "zUMIs_output", f"{project}kept_barcodes.txt")
+        kept_file = os.path.join(barcode_dir(out_dir), f"{project}kept_barcodes.txt")
         print(f"Loading reference barcodes (Detected) from {kept_file}...")
         source = "kept"
         if os.path.exists(kept_file):
@@ -377,7 +316,7 @@ def load_genes_from_gtf(gtf_file):
     return gene_order, gene_map
 
 def write_sparse_matrix(counts_dict, gene_list, gene_names_map, barcode_list, out_dir, subdir_name):
-    full_out_dir = os.path.join(out_dir, "zUMIs_output", "expression", subdir_name)
+    full_out_dir = os.path.join(expression_dir(out_dir), subdir_name)
     print(f"Generating deterministic, sorted sparse matrix in {full_out_dir}...")
     
     if not os.path.exists(full_out_dir):
@@ -617,8 +556,8 @@ def process_bam_and_matrix(bam_file, out_bam, config, threads):
 
         
         # Write Saturation Data (Histogram)
-        sat_file = os.path.join(out_dir, "zUMIs_output", "stats", f"{project}.saturation_dist.json")
-        gene_sat_file = os.path.join(out_dir, "zUMIs_output", "stats", f"{project}.gene_saturation_dist.json")
+        sat_file = os.path.join(stats_dir(out_dir), f"{project}.saturation_dist.json")
+        gene_sat_file = os.path.join(stats_dir(out_dir), f"{project}.gene_saturation_dist.json")
         
         if not os.path.exists(os.path.dirname(sat_file)):
             os.makedirs(os.path.dirname(sat_file))
@@ -639,6 +578,11 @@ def process_bam_and_matrix(bam_file, out_bam, config, threads):
         if count_introns:
             write_sparse_matrix(final_read_counts['intron'], gene_list, gene_names_ref, barcode_list, out_dir, f"{project}.intron.read")
             write_sparse_matrix(final_read_counts['inex'], gene_list, gene_names_ref, barcode_list, out_dir, f"{project}.inex.read")
+
+        if bool(config.get('make_h5ad', True)):
+            print("Exporting combined H5AD...")
+            h5ad_path = export_h5ad(out_dir, project, config=config)
+            print(f"H5AD written: {h5ad_path}")
 
         make_sorted_bam = bool(config.get('make_sorted_bam', False))
         make_ub_bam = bool(config.get('make_ub_bam', False))

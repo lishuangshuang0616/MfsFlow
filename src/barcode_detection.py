@@ -9,6 +9,8 @@ import re
 import collections
 import multiprocessing as mp
 
+from path_layout import barcode_dir
+
 # Suppress pandas chained assignment warnings
 pd.options.mode.chained_assignment = None 
 
@@ -43,6 +45,49 @@ def read_whitelist(bcfile):
         print(f"Error reading whitelist: {e}")
         sys.exit(1)
 
+
+def load_expected_id_map(expect_file):
+    expected = collections.OrderedDict()
+    if not expect_file or not os.path.exists(expect_file):
+        return expected
+
+    with open(expect_file) as f:
+        for line in f:
+            parts = line.rstrip("\n").split("\t")
+            if len(parts) < 3 or parts[0].lower() == "wellid":
+                continue
+            well_id = parts[0]
+            umi_barcodes = [x.strip().upper() for x in parts[1].split(",") if x.strip()]
+            internal_barcodes = [x.strip().upper() for x in parts[2].split(",") if x.strip()]
+            expected[well_id] = {
+                "umi": umi_barcodes,
+                "internal": internal_barcodes,
+            }
+    return expected
+
+
+def write_barcodes_by_well(kept_df, expect_file, out_file):
+    expected = load_expected_id_map(expect_file)
+    if not expected:
+        return False
+
+    count_map = {
+        str(row.XC).strip().upper(): int(row.n)
+        for row in kept_df.itertuples(index=False)
+    }
+    os.makedirs(os.path.dirname(out_file), exist_ok=True)
+    with open(out_file, "w") as out:
+        out.write("wellID\tumi_reads\tinternal_reads\ttotal_reads\tumi_barcodes\tinternal_barcodes\n")
+        for well_id, values in expected.items():
+            umi_reads = sum(count_map.get(bc, 0) for bc in values["umi"])
+            internal_reads = sum(count_map.get(bc, 0) for bc in values["internal"])
+            total_reads = umi_reads + internal_reads
+            out.write(
+                f"{well_id}\t{umi_reads}\t{internal_reads}\t{total_reads}\t"
+                f"{','.join(values['umi'])}\t{','.join(values['internal'])}\n"
+            )
+    return True
+
 def find_knee_point(sorted_counts):
     """
     Geometric implementation of the Knee/Elbow method.
@@ -68,7 +113,8 @@ def find_knee_point(sorted_counts):
 
 def cell_bc_selection(bccount_df, config):
     """
-    Selects true cell barcodes matching R logic.
+    Select true cell barcodes using the configured whitelist/automatic strategy.
+    Known whitelist modes are intentionally strict and do not fall back to top barcodes.
     """
     barcodes_config = config['barcodes']
     min_reads = barcodes_config.get('nReadsperCell', 10)
@@ -88,6 +134,8 @@ def cell_bc_selection(bccount_df, config):
     whitelist = set()
     if bc_file:
         whitelist = read_whitelist(bc_file)
+        if not whitelist:
+            raise ValueError(f"Whitelist file is empty: {bc_file}")
 
     # --- Strategy Selection ---
     
@@ -108,24 +156,22 @@ def cell_bc_selection(bccount_df, config):
             # If we have intersection, keep them
             df.loc[potential_keep & df['XC'].isin(whitelist), 'keep'] = True
         else:
-            print("  Warning: Automatic detection found no overlap with whitelist.")
-            # Fallback logic mirroring R's "continue with all/top 100" if intersection fails
-            pass 
+            raise ValueError(
+                "Automatic detection found no overlap with whitelist. "
+                "Check barcode position, --manual/--plate selection, or use --discoverBarcodes."
+            )
 
     elif bc_file and not strategy_auto:
         # Strategy: Strict Whitelist
         print("Strategy: Known Whitelist")
         df['keep'] = df['XC'].isin(whitelist)
         
-        # Fallback if no matches
         if not df['keep'].any():
-            print("  Warning! None of the annotated barcodes were detected.")
-            if len(df) < 100:
-                print("  Fallback: Keeping all barcodes (<100 total).")
-                df['keep'] = True
-            else:
-                print("  Fallback: Keeping top 100 barcodes.")
-                df.iloc[:100, df.columns.get_loc('keep')] = True
+            raise ValueError(
+                "None of the annotated barcodes were detected. "
+                "The pipeline will not fall back to top barcodes for manual/plate/custom modes; "
+                "check barcode position, --manual/--plate selection, or use --discoverBarcodes."
+            )
 
     elif bc_num is not None:
         # Strategy: Fixed Number
@@ -303,8 +349,8 @@ def fast_hamming_binning(true_bcs, candidate_bcs, threshold=1, threads=1):
     return final_df, raw_df
 
 def main():
-    parser = argparse.ArgumentParser(description="Python implementation of zUMIs barcode detection (Optimized)")
-    parser.add_argument('yaml_config', help="Path to zUMIs config YAML file")
+    parser = argparse.ArgumentParser(description="Barcode detection for MhsFlow")
+    parser.add_argument('yaml_config', help="Path to run config YAML file")
     args = parser.parse_args()
     
     print(f"Loading config from {args.yaml_config}")
@@ -314,7 +360,7 @@ def main():
     out_dir = opt['out_dir']
     
     # Ensure output directory
-    output_base = os.path.join(out_dir, "zUMIs_output")
+    output_base = barcode_dir(out_dir)
     if not os.path.exists(output_base):
         os.makedirs(output_base)
         
@@ -338,8 +384,9 @@ def main():
     
     # Save Step 1 Result (Pre-binning)
     # Rfwrite defaults to including headers "XC" and "n"
-    kept_file = os.path.join(out_dir, "zUMIs_output", f"{project}kept_barcodes.txt")
+    kept_file = os.path.join(output_base, f"{project}kept_barcodes.txt")
     kept_df[['XC', 'n']].to_csv(kept_file, sep='\t', index=False)
+    empty_bin_file = os.path.join(output_base, f"{project}.BCbinning.txt")
     
     # --- Step 2: Binning ---
     bc_opts = opt.get('barcodes', {})
@@ -348,10 +395,10 @@ def main():
     if bc_opts.get('BarcodeBinning', 0) > 0:
         do_binning = True
     if bc_opts.get('barcode_sharing'):
-        # Simple Hamming binning covers the recovery aspect, 
-        # though misses complex substring replacement logic of R.
+        # Generic barcode sharing uses the same Hamming recovery path here.
+        # The original substring replacement table logic is not enabled by default.
         do_binning = True
-        print("Note: MGI/Sharing logic simplified to standard Hamming binning.")
+        print("Note: generic barcode sharing requested; using Hamming recovery path.")
 
     if do_binning and len(kept_df) > 0:
         true_bcs = kept_df['XC'].values
@@ -372,7 +419,7 @@ def main():
                 candidates_df_indexed = candidates_df.set_index('XC')
                 
                 # --- Save Raw Map ---
-                raw_file = os.path.join(out_dir, "zUMIs_output", f"{project}.BCbinning.raw.txt")
+                raw_file = os.path.join(output_base, f"{project}.BCbinning.raw.txt")
                 bin_map_raw['n'] = bin_map_raw['falseBC'].map(candidates_df_indexed['n']).fillna(0).astype(int)
                 # Raw file usually needs specific columns too? R just dumps data.table
                 # We align with binmap structure: falseBC, hamming, trueBC, n
@@ -380,7 +427,7 @@ def main():
                 bin_map_raw.to_csv(raw_file, sep=',', index=False)
 
                 # --- Save Final Map ---
-                bin_file = os.path.join(out_dir, "zUMIs_output", f"{project}.BCbinning.txt")
+                bin_file = os.path.join(output_base, f"{project}.BCbinning.txt")
                 
                 # Get 'n' for falseBCs (already done for raw, reuse logic if needed, or just copy)
                 # bin_map is a subset of raw, so we can just filter raw or re-map
@@ -397,24 +444,29 @@ def main():
                 kept_df = kept_df.reset_index()
                 
                 # Save Final Result
-                binned_file = os.path.join(out_dir, "zUMIs_output", f"{project}kept_barcodes_binned.txt")
+                binned_file = os.path.join(output_base, f"{project}kept_barcodes_binned.txt")
                 kept_df[['XC', 'n']].to_csv(binned_file, sep=',', index=False)
             else:
                 print("No barcodes binned (no matches within threshold).")
-                # Even if no binning happened, R might output the "binned" file as a copy
-                # We should probably save the copy to ensure next steps find the file
-                binned_file = os.path.join(out_dir, "zUMIs_output", f"{project}kept_barcodes_binned.txt")
+                pd.DataFrame(columns=['falseBC', 'hamming', 'trueBC', 'n']).to_csv(empty_bin_file, sep=',', index=False)
+                binned_file = os.path.join(output_base, f"{project}kept_barcodes_binned.txt")
                 kept_df[['XC', 'n']].to_csv(binned_file, sep=',', index=False)
         else:
             print("No candidate barcodes for binning.")
+            pd.DataFrame(columns=['falseBC', 'hamming', 'trueBC', 'n']).to_csv(empty_bin_file, sep=',', index=False)
             # Save copy
-            binned_file = os.path.join(out_dir, "zUMIs_output", f"{project}kept_barcodes_binned.txt")
+            binned_file = os.path.join(output_base, f"{project}kept_barcodes_binned.txt")
             kept_df[['XC', 'n']].to_csv(binned_file, sep=',', index=False)
     
     elif do_binning and len(kept_df) == 0:
         print("Warning: No true barcodes selected. Skipping binning.")
     
     print("Done.")
+
+    expect_file = os.path.join(out_dir, "config", "expect_id_barcode.tsv")
+    by_well_file = os.path.join(output_base, f"{project}.kept_barcodes_by_well.tsv")
+    if write_barcodes_by_well(kept_df, expect_file, by_well_file):
+        print(f"Wrote barcode reads by well: {by_well_file}")
 
 if __name__ == "__main__":
     main()

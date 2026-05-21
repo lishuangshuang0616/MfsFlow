@@ -6,6 +6,8 @@ from pathlib import Path
 from string import Template
 import re
 
+from path_layout import expression_dir, outputs_dir, stats_dir
+
 # Hardcoded version since src/__init__.py might not exist
 __version__ = "1.0.0"
 
@@ -124,7 +126,7 @@ def _count_lines_in_tsv_gz(path):
 def _infer_total_genes_from_expression(sample_outdir, project):
     if not project:
         return None
-    base = Path(sample_outdir) / "zUMIs_output" / "expression"
+    base = Path(expression_dir(sample_outdir))
     candidates = [
         base / f"{project}.inex.umi" / "genes.tsv.gz",
         base / f"{project}.inex.umi" / "features.tsv.gz",
@@ -190,15 +192,14 @@ def create_report_directories(sample_outdir, _config=None):
 
     # For Mhsflt_toolkit, we might not need strict directory structure for REPORT 
     # if we are just generating one HTML, but we'll keep it for consistency.
-    # The pipeline outputs are in zUMIs_output mostly.
+    # Locate pipeline output tables from the current directory layout.
     
     # Create final output directory 'outs'
     # In the pipeline, out_dir is XPRESS_PROCESSING. 
     # sample_outdir passed here is likely XPRESS_PROCESSING.
     # The final report should go to 'outs' in the project root.
     
-    project_root = sample_path.parent # Assuming sample_outdir is project/XPRESS_PROCESSING
-    outs_dir = project_root / 'outs'
+    outs_dir = Path(outputs_dir(str(sample_path)))
     outs_dir.mkdir(parents=True, exist_ok=True)
     
     return outs_dir
@@ -207,7 +208,7 @@ def calculate_summary_metrics(sample_outdir, project=""):
     """
     Calculate summary metrics from stats.tsv
     """
-    stats_tsv = list((sample_outdir / 'zUMIs_output' / 'stats').glob('*.stats.tsv'))
+    stats_tsv = list(Path(stats_dir(str(sample_outdir))).glob('*.stats.tsv'))
     if not stats_tsv:
         stats_tsv = list(sample_outdir.rglob('*.stats.tsv'))
         
@@ -380,7 +381,7 @@ def _process_rna_stats_table_data(sample_outdir, combined_context):
     combined_context['rna_stats_table_data'] = '[]'
     combined_context['rna_stats_table_available'] = False
     try:
-        candidates = list((sample_outdir / 'zUMIs_output' / 'stats').glob('*.stats.tsv'))
+        candidates = list(Path(stats_dir(str(sample_outdir))).glob('*.stats.tsv'))
         if not candidates:
             candidates = list(sample_outdir.rglob('*.stats.tsv'))
         if not candidates:
@@ -401,7 +402,7 @@ def _process_rna_gene_body_coverage_data(sample_outdir, combined_context):
     combined_context['rna_gene_body_internal_maxnorm'] = '[]'
     combined_context['rna_gene_body_coverage_available'] = False
     try:
-        candidates = list((sample_outdir / 'zUMIs_output' / 'stats').glob('*.geneBodyCoverage.txt'))
+        candidates = list(Path(stats_dir(str(sample_outdir))).glob('*.geneBodyCoverage.txt'))
         if not candidates:
             candidates = list(sample_outdir.rglob('*.geneBodyCoverage.txt'))
         if not candidates:
@@ -437,7 +438,7 @@ def _process_rna_read_distribution_data(sample_outdir, combined_context):
     combined_context['rna_read_distribution_bar_data'] = '{}'
     combined_context['rna_read_distribution_box_data'] = '{}'
     try:
-        candidates = list((sample_outdir / 'zUMIs_output' / 'stats').glob('*.read_stats.json'))
+        candidates = list(Path(stats_dir(str(sample_outdir))).glob('*.read_stats.json'))
         if not candidates:
             candidates = list(sample_outdir.rglob('*.read_stats.json'))
         read_stats = {}
@@ -517,7 +518,7 @@ def _process_rna_saturation_data(sample_outdir, combined_context):
         combined_context['rna_saturation_median_genes_read'] = '[]'
         combined_context['rna_saturation_available'] = False
 
-        candidates = list((sample_outdir / 'zUMIs_output' / 'stats').glob('*.saturation.tsv'))
+        candidates = list(Path(stats_dir(str(sample_outdir))).glob('*.saturation.tsv'))
         if not candidates:
             candidates = list(sample_outdir.rglob('*.saturation.tsv'))
         if candidates:

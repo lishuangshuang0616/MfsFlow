@@ -7,6 +7,8 @@ import gzip
 import json
 import numpy as np
 
+from path_layout import config_dir, expression_dir, stats_dir
+
 try:
     import matplotlib
     matplotlib.use('Agg')
@@ -22,7 +24,7 @@ def load_config(yaml_file):
 def load_barcode_mapping(out_dir, _project):
     mapping = {}
     expect_candidates = [
-        os.path.join(out_dir, "config", "expect_id_barcode.tsv"),
+        os.path.join(config_dir(out_dir), "expect_id_barcode.tsv"),
         os.path.join(out_dir, "expect_id_barcode.tsv"),
         os.path.join(os.path.dirname(out_dir.rstrip('/')), "config", "expect_id_barcode.tsv"),
     ]
@@ -181,8 +183,8 @@ def calculate_saturation(out_dir, project):
     3. Median Genes per Cell (UMI based)
     4. Median Genes per Cell (Read based)
     """
-    sat_json_global = os.path.join(out_dir, "zUMIs_output", "stats", f"{project}.saturation_dist.json")
-    sat_json_gene = os.path.join(out_dir, "zUMIs_output", "stats", f"{project}.gene_saturation_dist.json")
+    sat_json_global = os.path.join(stats_dir(out_dir), f"{project}.saturation_dist.json")
+    sat_json_gene = os.path.join(stats_dir(out_dir), f"{project}.gene_saturation_dist.json")
     
     # Locate UMI and Read Matrices (Strictly enforce same type for comparison)
     umi_matrix_dir = None
@@ -190,8 +192,8 @@ def calculate_saturation(out_dir, project):
     
     # Prefer Intron+Exon (inex) if available, else Exon
     for seq_type in ["inex", "exon"]:
-        d_umi = os.path.join(out_dir, "zUMIs_output", "expression", f"{project}.{seq_type}.umi")
-        d_read = os.path.join(out_dir, "zUMIs_output", "expression", f"{project}.{seq_type}.read")
+        d_umi = os.path.join(expression_dir(out_dir), f"{project}.{seq_type}.umi")
+        d_read = os.path.join(expression_dir(out_dir), f"{project}.{seq_type}.read")
         
         # Check for UMI matrix existence
         if os.path.exists(os.path.join(d_umi, "matrix.mtx.gz")):
@@ -372,12 +374,12 @@ def plot_saturation(stats, out_dir, project):
     plt.title(f"Saturation Analysis: {project}")
     fig.tight_layout()
     
-    out_pdf = os.path.join(out_dir, "zUMIs_output", "stats", f"{project}.saturation.pdf")
+    out_pdf = os.path.join(stats_dir(out_dir), f"{project}.saturation.pdf")
     plt.savefig(out_pdf)
     plt.close()
     
     # Write TSV
-    out_tsv = os.path.join(out_dir, "zUMIs_output", "stats", f"{project}.saturation.tsv")
+    out_tsv = os.path.join(stats_dir(out_dir), f"{project}.saturation.tsv")
     print(f"Writing saturation table to {out_tsv}...")
     with open(out_tsv, 'w') as f:
         # Updated Header
@@ -473,8 +475,8 @@ def main():
     project = config['project']
     out_dir = config['out_dir']
     
-    stats_dir = os.path.join(out_dir, "zUMIs_output", "stats")
-    if not os.path.exists(stats_dir): os.makedirs(stats_dir)
+    stats_output_dir = stats_dir(out_dir)
+    if not os.path.exists(stats_output_dir): os.makedirs(stats_output_dir)
     
     # 1. Load Barcode Mapping
     bc_mapping = load_barcode_mapping(out_dir, project)
@@ -483,8 +485,8 @@ def main():
     
     # 2. Calculate Matrix Stats (Fast, independent)
     print("Calculating Matrix Statistics...")
-    umi_exon_dir = os.path.join(out_dir, "zUMIs_output", "expression", f"{project}.exon.umi")
-    umi_intron_dir = os.path.join(out_dir, "zUMIs_output", "expression", f"{project}.intron.umi")
+    umi_exon_dir = os.path.join(expression_dir(out_dir), f"{project}.exon.umi")
+    umi_intron_dir = os.path.join(expression_dir(out_dir), f"{project}.intron.umi")
     
     # Load UMI stats
     stats_exon = calculate_matrix_stats(umi_exon_dir)
@@ -498,8 +500,8 @@ def main():
         stats_inex[bc]['genes'] = len(ex_st['gene_set'] | in_st['gene_set'])
 
     # Load Read stats (New Feature)
-    read_exon_dir = os.path.join(out_dir, "zUMIs_output", "expression", f"{project}.exon.read")
-    read_intron_dir = os.path.join(out_dir, "zUMIs_output", "expression", f"{project}.intron.read")
+    read_exon_dir = os.path.join(expression_dir(out_dir), f"{project}.exon.read")
+    read_intron_dir = os.path.join(expression_dir(out_dir), f"{project}.intron.read")
     
     rstats_exon = calculate_matrix_stats(read_exon_dir)
     rstats_intron = calculate_matrix_stats(read_intron_dir)
@@ -511,7 +513,7 @@ def main():
         rstats_inex[bc]['genes'] = len(ex_st['gene_set'] | in_st['gene_set'])
 
     # 3. Load Pre-calculated Read Stats & Coverage
-    stats_json_path = os.path.join(out_dir, "zUMIs_output", "stats", f"{project}.read_stats.json")
+    stats_json_path = os.path.join(stats_output_dir, f"{project}.read_stats.json")
     
     read_stats = collections.defaultdict(lambda: collections.defaultdict(int))
     cov_umi = np.zeros(100, dtype=np.int64)
@@ -537,11 +539,11 @@ def main():
         print("Warning: Pre-calculated stats not found. Plots will be missing.")
 
     # 4. Plots and Tables
-    out_prefix = os.path.join(stats_dir, project)
+    out_prefix = os.path.join(stats_output_dir, project)
     plot_coverage(cov_umi, cov_int, out_prefix)
     
     # Write Table
-    output_table = os.path.join(stats_dir, f"{project}.stats.tsv")
+    output_table = os.path.join(stats_output_dir, f"{project}.stats.tsv")
     print(f"Writing stats table to {output_table}...")
     
     with open(output_table, 'w') as f:
@@ -590,8 +592,8 @@ def main():
             f.write("\t".join(map(str, row)) + "\n")
 
     if HAS_MATPLOTLIB:
-        plot_gene_umi_counts_by_type(stats_exon, stats_intron, stats_inex, all_wells, os.path.join(stats_dir, f"{project}.geneUMIcounts.pdf"))
-        plot_features(read_stats, kept_barcodes, os.path.join(stats_dir, f"{project}.features.pdf"))
+        plot_gene_umi_counts_by_type(stats_exon, stats_intron, stats_inex, all_wells, os.path.join(stats_output_dir, f"{project}.geneUMIcounts.pdf"))
+        plot_features(read_stats, kept_barcodes, os.path.join(stats_output_dir, f"{project}.features.pdf"))
             
     # 5. Saturation Analysis
     sat_stats = calculate_saturation(out_dir, project)

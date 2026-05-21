@@ -8,6 +8,9 @@ import math
 import shutil
 import collections
 import itertools
+import sys
+
+from path_layout import barcode_dir
 
 def load_config(yaml_file):
     with open(yaml_file, 'r') as f:
@@ -210,12 +213,11 @@ def main():
     
     # Define paths for corrector
     corrector_script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "stream_corrector.py")
-    bc_bin_file = os.path.join(out_dir, "zUMIs_output", f"{project}.BCbinning.txt")
+    bc_bin_file = os.path.join(barcode_dir(out_dir), f"{project}.BCbinning.txt")
     
     # Base params (Common)
     # Important: readFilesType SAM because our corrector outputs uncompressed BAM (which STAR treats as SAM/BAM stream)
     # STAR auto-detects BAM vs SAM if we say SAM usually, or we can use BAM Unsorted
-    # Fix: Set sjdbOverhang to 100 to match typical index generation, avoiding mismatch errors with shorter reads
     misc_base = f"--genomeDir {star_index} --sjdbGTFfile {final_gtf} --runThreadN {num_threads} --sjdbOverhang {read_len - 1} --readFilesType SAM {read_layout} --outSAMmultNmax 1 --outFilterMultimapNmax 50 --outSAMunmapped Within --outSAMtype BAM Unsorted --limitOutSJcollapsed 5000000"
     
     extra_params = config['reference'].get('additional_STAR_params', '') or ""
@@ -230,7 +232,7 @@ def main():
         prefix_umi = os.path.join(out_dir, f"{project}.filtered.tagged.umi.")
         
         # Corrector Args (Producer)
-        corrector_args = ['python3', corrector_script, '--binning', bc_bin_file, '--idmap', expect_id_file, '--type', 'umi'] + umi_bams
+        corrector_args = [sys.executable or 'python3', corrector_script, '--binning', bc_bin_file, '--idmap', expect_id_file, '--type', 'umi'] + umi_bams
         
         # STAR Command (Consumer)
         # --readFilesIn /dev/stdin
@@ -244,7 +246,7 @@ def main():
         prefix_int = os.path.join(out_dir, f"{project}.filtered.tagged.internal.")
         
         # Corrector Args
-        corrector_args = ['python3', corrector_script, '--binning', bc_bin_file, '--idmap', expect_id_file, '--type', 'internal'] + internal_bams
+        corrector_args = [sys.executable or 'python3', corrector_script, '--binning', bc_bin_file, '--idmap', expect_id_file, '--type', 'internal'] + internal_bams
         
         # STAR Command
         cmd_int = f"{star_exec} {misc_base} {extra_params} {param_add_fa} {twopass} --readFilesIn /dev/stdin --outFileNamePrefix {prefix_int}"

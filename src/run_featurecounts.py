@@ -11,6 +11,8 @@ import math
 import collections
 import gzip
 
+from path_layout import expression_dir, stats_dir
+
 def load_config(yaml_file):
     with open(yaml_file, 'r') as f:
         return yaml.safe_load(f)
@@ -48,8 +50,8 @@ def get_bam_chromosomes(bam_file, samtools_exec='samtools'):
 
 def load_gene_models(gtf_file):
     """
-    Loads exon models from GTF, merges them, and calculates 100 genomic percentile points for each gene.
-    Returns: dict {gene_id: {'chrom': str, 'strand': str, 'percentiles': list of 100 ints}}
+    Loads exon models from GTF, merges them, and calculates 100 exon-body percentile points for each gene.
+    The coordinate list is sorted for fast lookup, while each coordinate keeps its 5'->3' percentile index.
     """
     print(f"Loading gene models for stats from {gtf_file}...")
     gene_exons = collections.defaultdict(list)
@@ -116,25 +118,190 @@ def load_gene_models(gtf_file):
         if strand == '-':
             gene_all_base.reverse()
             
-        points = []
+        points_5_to_3 = []
         size = len(gene_all_base)
         for i in range(1, 101):
             idx = int(math.ceil(size * i / 100.0)) - 1
-            points.append(gene_all_base[idx])
+            points_5_to_3.append(gene_all_base[idx])
+
+        indexed_points = sorted((coord, pct_idx) for pct_idx, coord in enumerate(points_5_to_3))
             
         models[gene_id] = {
             "chrom": gene_chrom.get(gene_id),
             "strand": strand,
-            "percentiles": sorted(points) # Sorted for bisect
+            "percentile_coords": [coord for coord, _ in indexed_points],
+            "percentile_bins": [pct_idx for _, pct_idx in indexed_points],
         }
 
     print(f"Loaded {len(models)} gene models.")
     return models
 
+
+def _parse_gene_id(attributes):
+    if 'gene_id "' in attributes:
+        return attributes.split('gene_id "')[1].split('"')[0]
+    if 'gene_id' in attributes:
+        try:
+            return attributes.split('gene_id')[1].strip().split(';')[0].strip().strip('"')
+        except Exception:
+            return None
+    return None
+
+
+def _parse_gene_name(attributes, gene_id):
+    if 'gene_name "' in attributes:
+        return attributes.split('gene_name "')[1].split('"')[0]
+    return gene_id
+
+
+def _merge_intervals(intervals):
+    intervals = sorted(intervals)
+    if not intervals:
+        return []
+    merged = []
+    curr_start, curr_end = intervals[0]
+    for next_start, next_end in intervals[1:]:
+        if next_start <= curr_end + 1:
+            curr_end = max(curr_end, next_end)
+        else:
+            merged.append((curr_start, curr_end))
+            curr_start, curr_end = next_start, next_end
+    merged.append((curr_start, curr_end))
+    return merged
+
+
+def _subtract_intervals(intervals, masks):
+    masks = _merge_intervals(masks)
+    result = []
+    for start, end in intervals:
+        pieces = [(start, end)]
+        for mask_start, mask_end in masks:
+            next_pieces = []
+            for piece_start, piece_end in pieces:
+                if mask_end < piece_start or mask_start > piece_end:
+                    next_pieces.append((piece_start, piece_end))
+                    continue
+                if mask_start > piece_start:
+                    next_pieces.append((piece_start, mask_start - 1))
+                if mask_end < piece_end:
+                    next_pieces.append((mask_end + 1, piece_end))
+            pieces = next_pieces
+            if not pieces:
+                break
+        result.extend(pieces)
+    return result
+
+
+def _overlap_regions(intervals):
+    events = []
+    for start, end in intervals:
+        events.append((start, 1))
+        events.append((end + 1, -1))
+    events.sort()
+
+    overlap = []
+    depth = 0
+    prev_pos = None
+    for pos, delta in events:
+        if prev_pos is not None and pos > prev_pos and depth > 1:
+            overlap.append((prev_pos, pos - 1))
+        depth += delta
+        prev_pos = pos
+    return _merge_intervals(overlap)
+
+
+def _intersect_intervals(left, right):
+    out = []
+    i = 0
+    j = 0
+    left = _merge_intervals(left)
+    right = _merge_intervals(right)
+    while i < len(left) and j < len(right):
+        start = max(left[i][0], right[j][0])
+        end = min(left[i][1], right[j][1])
+        if start <= end:
+            out.append((start, end))
+        if left[i][1] < right[j][1]:
+            i += 1
+        else:
+            j += 1
+    return out
+
+
+def _make_global_gaps(intervals):
+    merged = _merge_intervals(intervals)
+    gaps = []
+    for i in range(len(merged) - 1):
+        start = merged[i][1] + 1
+        end = merged[i + 1][0] - 1
+        if start <= end:
+            gaps.append((start, end))
+    return gaps
+
+
+def _disjoin_gene_bodies(genes):
+    by_locus = collections.defaultdict(list)
+    for gene_id, data in genes.items():
+        if not data["exons"]:
+            continue
+        starts = [x[0] for x in data["exons"]]
+        ends = [x[1] for x in data["exons"]]
+        by_locus[(data["chrom"], data["strand"])].append((min(starts), max(ends), gene_id))
+
+    unique_segments = collections.defaultdict(list)
+    for (chrom, strand), bodies in by_locus.items():
+        breakpoints = set()
+        for start, end, _gene_id in bodies:
+            breakpoints.add(start)
+            breakpoints.add(end + 1)
+        ordered = sorted(breakpoints)
+        for left, right_next in zip(ordered, ordered[1:]):
+            seg_start = left
+            seg_end = right_next - 1
+            if seg_start > seg_end:
+                continue
+            covering = [
+                gene_id
+                for body_start, body_end, gene_id in bodies
+                if body_start <= seg_start and seg_end <= body_end
+            ]
+            if len(covering) == 1:
+                unique_segments[covering[0]].append((seg_start, seg_end))
+    return {gene_id: _merge_intervals(parts) for gene_id, parts in unique_segments.items()}
+
+
+def _build_introns_like_r(genes):
+    global_exons = collections.defaultdict(list)
+    for data in genes.values():
+        merged = _merge_intervals(data["exons"])
+        global_exons[(data["chrom"], data["strand"])].extend(merged)
+
+    global_gaps = {
+        locus: _make_global_gaps(exons)
+        for locus, exons in global_exons.items()
+    }
+    unique_gene_segments = _disjoin_gene_bodies(genes)
+
+    introns = {}
+    for gene_id, data in genes.items():
+        locus = (data["chrom"], data["strand"])
+        gaps = global_gaps.get(locus, [])
+        unique_body = unique_gene_segments.get(gene_id, [])
+        gene_introns = _intersect_intervals(gaps, unique_body)
+        introns[gene_id] = [
+            (start, end)
+            for start, end in gene_introns
+            if 10 < (end - start + 1) < 100000
+        ]
+    return introns
+
+
 def parse_gtf_and_create_saf(gtf_file, out_prefix, valid_chroms=None):
     """
-    Parses GTF, merges exons per gene, and creates a Combined SAF file (Exon + Intron).
-    Exons use GeneID. Introns use GeneID__INTRON__.
+    Parse GTF and create a combined exon/intron SAF.
+
+    Introns are exon gaps clipped to unique gene-body regions, approximating the
+    GenomicRanges/plyranges construction used by the original workflow.
     Returns path to combined_saf, and a dictionary mapping gene_id to gene_name.
     """
     print(f"Parsing GTF: {gtf_file}...")
@@ -149,7 +316,8 @@ def parse_gtf_and_create_saf(gtf_file, out_prefix, valid_chroms=None):
             if len(parts) < 9: continue
             
             feature_type = parts[2]
-            if feature_type != 'exon': continue
+            if feature_type != 'exon':
+                continue
             
             chrom = parts[0]
             if valid_chroms and chrom not in valid_chroms:
@@ -160,31 +328,25 @@ def parse_gtf_and_create_saf(gtf_file, out_prefix, valid_chroms=None):
             strand = parts[6]
             attributes = parts[8]
             
-            gene_id = None
-            if 'gene_id "' in attributes:
-                gene_id = attributes.split('gene_id "')[1].split('"')[0]
-            elif 'gene_id' in attributes:
-                pass
-            
-            if not gene_id: continue
+            gene_id = _parse_gene_id(attributes)
+            if not gene_id:
+                continue
 
-            # Extract gene_name if available
-            gene_name = gene_id # Default to gene_id
-            if 'gene_name "' in attributes:
-                gene_name = attributes.split('gene_name "')[1].split('"')[0]
+            gene_name = _parse_gene_name(attributes, gene_id)
             
             # Store mapping
             if gene_id not in gene_id_to_name:
                 gene_id_to_name[gene_id] = gene_name
             
             if gene_id not in genes:
-                genes[gene_id] = {'chrom': chrom, 'strand': strand, 'intervals': []}
+                genes[gene_id] = {'chrom': chrom, 'strand': strand, 'exons': []}
             
-            genes[gene_id]['intervals'].append((start, end))
+            genes[gene_id]['exons'].append((start, end))
             
     print(f"Loaded {len(genes)} genes. Generating Combined SAF file...")
     
     combined_saf_path = f"{out_prefix}.combined.saf"
+    introns_by_gene = _build_introns_like_r(genes)
     
     with open(combined_saf_path, 'w') as f_out:
         header = "GeneID\tChr\tStart\tEnd\tStrand\n"
@@ -193,33 +355,14 @@ def parse_gtf_and_create_saf(gtf_file, out_prefix, valid_chroms=None):
         for gene_id, data in genes.items():
             chrom = data['chrom']
             strand = data['strand']
-            intervals = sorted(data['intervals'])
-            
-            merged = []
-            if intervals:
-                curr_start, curr_end = intervals[0]
-                for next_start, next_end in intervals[1:]:
-                    if next_start <= curr_end + 1:
-                        curr_end = max(curr_end, next_end)
-                    else:
-                        merged.append((curr_start, curr_end))
-                        curr_start, curr_end = next_start, next_end
-                merged.append((curr_start, curr_end))
+            merged = _merge_intervals(data['exons'])
             
             # Write Exons
             for start, end in merged:
                 f_out.write(f"{gene_id}\t{chrom}\t{start}\t{end}\t{strand}\n")
             
-            # Write Introns
-            if len(merged) > 1:
-                for i in range(len(merged) - 1):
-                    intron_start = merged[i][1] + 1
-                    intron_end = merged[i+1][0] - 1
-                    
-                    if intron_end >= intron_start:
-                        if (intron_end - intron_start + 1) > 10:
-                            # Use suffix to distinguish
-                            f_out.write(f"{gene_id}__INTRON__\t{chrom}\t{intron_start}\t{intron_end}\t{strand}\n")
+            for intron_start, intron_end in introns_by_gene.get(gene_id, []):
+                f_out.write(f"{gene_id}__INTRON__\t{chrom}\t{intron_start}\t{intron_end}\t{strand}\n")
 
     return combined_saf_path, gene_id_to_name
 
@@ -351,8 +494,8 @@ def process_bam_and_calculate_stats(input_bam, out_bam, samtools_exec, threads=4
             
         if not blocks: return False
         
-        pct_points = model["percentiles"]
-        strand_minus = (model["strand"] == '-')
+        pct_points = model["percentile_coords"]
+        pct_bins = model["percentile_bins"]
         
         hit = False
         for b_start, b_end in blocks:
@@ -362,14 +505,8 @@ def process_bam_and_calculate_stats(input_bam, out_bam, samtools_exec, threads=4
             if idx_end > idx_start:
                 hit = True
                 indices = range(idx_start, idx_end)
-                if strand_minus:
-                    for i in indices:
-                        bin_idx = 99 - i
-                        cov_arr[bin_idx] += 1
-                else:
-                    for i in indices:
-                        bin_idx = i
-                        cov_arr[bin_idx] += 1
+                for i in indices:
+                    cov_arr[pct_bins[i]] += 1
         return hit
 
     # Try pysam
@@ -656,7 +793,7 @@ def main():
     header_bam = umi_bam if os.path.exists(umi_bam) else internal_bam
     valid_chroms = get_bam_chromosomes(header_bam, samtools_exec)
     
-    saf_dir = os.path.join(out_dir, "zUMIs_output", "expression")
+    saf_dir = expression_dir(out_dir)
     if not os.path.exists(saf_dir): os.makedirs(saf_dir)
         
     saf_prefix = os.path.join(saf_dir, f"{project}")
@@ -713,7 +850,7 @@ def main():
         bams_to_merge.append(processed_umi)
 
     # Save Stats
-    stats_out = os.path.join(out_dir, "zUMIs_output", "stats", f"{project}.read_stats.json")
+    stats_out = os.path.join(stats_dir(out_dir), f"{project}.read_stats.json")
     if not os.path.exists(os.path.dirname(stats_out)):
         os.makedirs(os.path.dirname(stats_out))
         

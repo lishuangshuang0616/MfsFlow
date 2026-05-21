@@ -1,11 +1,11 @@
-# zUMIs_dev
+# MhsFlow
 
-**zUMIs_dev** is a comprehensive and flexible pipeline designed for processing high-sensitivity full-length transcriptome data. It is an enhanced version of the zUMIs pipeline for MGI, automated to handle workflows from raw FASTQ data to gene expression quantification, specifically optimized for MGI sequencing chemistry.
+**MhsFlow** is a comprehensive and flexible pipeline designed for processing high-sensitivity full-length transcriptome data, automated to handle workflows from raw FASTQ data to gene expression quantification and optimized for MGI sequencing chemistry.
 
 ## Features
 
 - **End-to-End Pipeline**: Handles filtering, mapping, counting, and statistical analysis.
-- **Flexible Configuration**: Supports manual, auto, and custom sample types via YAML configuration.
+- **Simple CLI Configuration**: Customer-facing parameters are passed on the command line; a run YAML is generated automatically for provenance.
 - **Multi-Species Support**: Optimized for Human and Mouse genomes.
 - **Efficient Processing**: Distinct stages for Filtering, Mapping, Counting, and Summarising.
 - **Detailed Reporting**: Generates comprehensive statistics and analysis results.
@@ -14,10 +14,10 @@
 
 Ensure you have the following installed on your system:
 
-- **Python 3.6+**
-- **PyYAML**: Install via pip:
+- **Python 3.8+**
+- **Python packages**: Install via pip:
   ```bash
-  pip install PyYAML
+  pip install -r requirements.txt
   ```
 - **STAR**: For genome alignment.
 - **Samtools**: For BAM file manipulation.
@@ -39,41 +39,73 @@ Ensure you have the following installed on your system:
     sh release_env.sh
     ```
 
-## Configuration
+## Reference
 
 1.  **Build Reference Index**
     Download the genome sequence (FASTA) and gene annotation (GTF) files from [GENCODE](https://www.gencodegenes.org). Build the genome index using STAR.
 
-2.  **Create Config File**
-    Copy the example configuration and modify it for your project:
-    ```bash
-    cp yaml/example_config.yaml my_config.yaml
-    ```
-    
-    Edit `my_config.yaml` to set your paths, sample IDs, and analysis parameters. Key sections include:
-    - `project`: Project name (used for output files).
-    - `sample`: Define species (`human` or `mouse`) and type (`auto`, `manual`, `custom`).
-    - `sequence_files`: Paths to your FASTQ files and read structure definitions.
-    - `reference`: Paths to your STAR index and GTF file.
-    - `out_dir`: Directory for analysis outputs.
-
 ## Usage
 
-Run the analysis pipeline by pointing to your configuration file:
+Run the analysis pipeline with command-line parameters:
 
 ```bash
-python3 run_analysis_pipeline.py -y my_config.yaml
+python3 run_analysis_pipeline.py \
+  --fastqs /path/to/fastq_dir \
+  --genomeDir /path/to/reference \
+  --sample SAMPLE_NAME \
+  --plate 1 \
+  --outdir /path/to/output \
+  --threads 20
 ```
 
-The pipeline will execute the stages defined in your config (Filtering -> Mapping -> Counting -> Summarising).
+By default, the pipeline expects STAR index at `<genomeDir>/star` and GTF at `<genomeDir>/genes/genes.gtf`.
+The pipeline generates `XPRESS_PROCESSING/config/run_config.yaml` automatically for reproducibility.
+
+Input modes:
+
+- If R2 is 20 bp longer than R1, the last 20 bp of R2 are treated as the read barcode.
+- If R1 and R2 have the same length, provide `--samplesheet`; barcode is assigned per FASTQ pair.
+- Other read length structures are rejected.
+
+Samplesheet format for equal-length R1/R2 data:
+
+```csv
+read1,read2,barcode
+A_R1.fq.gz,A_R2.fq.gz,ACGTACGTACGTACGTACGT
+B_R1.fq.gz,B_R2.fq.gz,TGCATGCATGCATGCATGCA
+```
+
+The barcode sequence is looked up in the expected barcode table generated from
+`--plate`, `--manual`, or `--expectBarcode`. The pipeline derives the well ID
+and whether the FASTQ pair is UMI or internal from that lookup.
+
+Barcode modes:
+
+```bash
+--plate 1                  # automatic plate barcode list
+--manual 20,21             # manual barcode IDs
+--expectBarcode barcodes.tsv
+--discoverBarcodes         # infer plate/manual barcode set from observed reads
+```
+
+For `--manual`, `--plate`, and `--expectBarcode`, barcode detection is strict:
+if none of the expected barcodes are observed, the run stops instead of falling
+back to top-count barcodes. `--discoverBarcodes` compares observed read barcodes
+against the bundled manual/plate barcode lists with exact/Hamming-1 matching,
+writes a discovery report, then continues with the inferred barcode set.
 
 ## Output Structure
 
-Results will be saved in the `results` subdirectory within your specified `out_dir`.
+Results are saved under your specified `out_dir`:
 
-- `results/`: Final analysis reports and gene expression matrices.
-- `analysis/`: Intermediate files including BAMs and stats.
-- `config/`: Configuration files used for the run.
+- `XPRESS_PROCESSING/config/`: Generated run configuration and expected barcode tables.
+- `XPRESS_PROCESSING/logs/`: Pipeline logs.
+- `XPRESS_PROCESSING/barcodes/`: Kept barcodes, barcode binning, and barcode discovery report.
+- `XPRESS_PROCESSING/expression/`: MEX matrices and `<project>.h5ad`.
+- `XPRESS_PROCESSING/stats/`: QC tables, Q30 statistics, and plots.
+- `XPRESS_PROCESSING/<project>.filtered.Aligned.GeneTagged.UBcorrected.sorted.bam`: Final UB-corrected sorted BAM.
+- `XPRESS_PROCESSING/intermediate/`: Temporary BAM and split FASTQ working files.
+- `outs/`: Final reports and customer-facing outputs.
 
 ## License
 

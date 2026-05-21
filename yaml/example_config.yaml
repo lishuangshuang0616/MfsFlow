@@ -61,7 +61,7 @@ filter_cutoffs:
 
 #Options for Barcode handling
 #You can give either number of top barcodes to use or give an annotation of cell barcodes.
-#If you leave both barcode_num and barcode_file empty, zUMIs will perform automatic cell barcode selection for you!
+#If you leave both barcode_num and barcode_file empty, the pipeline will perform automatic cell barcode selection for you!
 barcodes:
   barcode_num: ~
   automatic: no 
@@ -82,12 +82,12 @@ counting_opts:
 #produce stats files and plots?
 make_stats: yes
 
-#Start zUMIs from stage. Possible TEXT(Filtering, Mapping, Counting, Summarising). Default: Filtering.
+#Start pipeline from stage. Possible TEXT(Filtering, Mapping, Counting, Summarising). Default: Filtering.
 which_Stage: Filtering
 
 #define dependencies program paths
-#Tools are automatically resolved from <zUMIs_directory>/software on Linux.
-zUMIs_directory: path to zUMIs # must be set as the path for zUMIs provided by this repository
+#Tools are automatically resolved from <toolkit_directory>/software on Linux.
+toolkit_directory: path to toolkit # must be set as the path for this repository
 
 #below, fqfilter will add a read_layout flag defining SE or PE
 read_layout: PE

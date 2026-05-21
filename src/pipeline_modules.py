@@ -6,6 +6,8 @@ import math
 import shlex
 import shutil
 
+from path_layout import stats_dir
+
 def run_shell_cmd(cmd, step_name, log_file=None):
     is_shell = isinstance(cmd, str)
     cmd_str = cmd if is_shell else " ".join(shlex.quote(str(x)) for x in cmd)
@@ -413,6 +415,44 @@ def split_fastq(fq_files, n_threads, lines_per_chunk, out_dir, project, pigz_exe
 
     return sorted(list(collected_suffixes))
 
+def merge_q30_stats(tmp_dir, project, out_dir):
+    q30_files = glob.glob(os.path.join(tmp_dir, f"{project}.*.Q30stats.txt"))
+    if not q30_files:
+        return None
+
+    q30_counts = {}
+    for fname in q30_files:
+        with open(fname, 'r') as infile:
+            for line in infile:
+                if line.startswith("metric"):
+                    continue
+                parts = line.strip().split('\t')
+                if len(parts) < 3:
+                    continue
+                metric = parts[0]
+                try:
+                    total_bases = int(parts[1])
+                    q30_bases = int(parts[2])
+                except ValueError:
+                    continue
+                prev_total, prev_q30 = q30_counts.get(metric, (0, 0))
+                q30_counts[metric] = (prev_total + total_bases, prev_q30 + q30_bases)
+
+    if not q30_counts:
+        return None
+
+    q30_out_dir = stats_dir(out_dir)
+    os.makedirs(q30_out_dir, exist_ok=True)
+    q30_out = os.path.join(q30_out_dir, f"{project}.q30_stats.tsv")
+    with open(q30_out, 'w') as outfile:
+        outfile.write("metric\ttotal_bases\tq30_bases\tq30_rate\n")
+        for metric in sorted(q30_counts):
+            total_bases, q30_bases = q30_counts[metric]
+            q30_rate = (q30_bases / total_bases) if total_bases else 0.0
+            outfile.write(f"{metric}\t{total_bases}\t{q30_bases}\t{q30_rate:.6f}\n")
+    return q30_out
+
+
 def merge_bam_stats(tmp_dir, project, out_dir, yaml_file, samtools_exec):
     """
     Replaces mergeBAM.sh
@@ -440,6 +480,8 @@ def merge_bam_stats(tmp_dir, project, out_dir, yaml_file, samtools_exec):
     with open(out_stats, 'w') as outfile:
         for bc in sorted(bc_counts.keys()):
             outfile.write(f"{bc}\t{bc_counts[bc]}\n")
+
+    merge_q30_stats(tmp_dir, project, out_dir)
                 
     # 2. Check Layout
     bam_files = glob.glob(os.path.join(tmp_dir, f"{project}.*.raw.tagged.bam"))
@@ -474,7 +516,7 @@ def merge_bam_stats(tmp_dir, project, out_dir, yaml_file, samtools_exec):
                 
                 ydata['read_layout'] = layout
 
-                class ZumisDumper(yaml.SafeDumper):
+                class RunConfigDumper(yaml.SafeDumper):
                     pass
 
                 def bool_representer(dumper, value):
@@ -483,11 +525,11 @@ def merge_bam_stats(tmp_dir, project, out_dir, yaml_file, samtools_exec):
                 def none_representer(dumper, _value):
                     return dumper.represent_scalar('tag:yaml.org,2002:null', '~')
 
-                yaml.add_representer(bool, bool_representer, Dumper=ZumisDumper)
-                yaml.add_representer(type(None), none_representer, Dumper=ZumisDumper)
+                yaml.add_representer(bool, bool_representer, Dumper=RunConfigDumper)
+                yaml.add_representer(type(None), none_representer, Dumper=RunConfigDumper)
 
                 with open(yaml_file, 'w') as f:
-                    yaml.dump(ydata, f, Dumper=ZumisDumper, default_flow_style=False, sort_keys=False)
+                    yaml.dump(ydata, f, Dumper=RunConfigDumper, default_flow_style=False, sort_keys=False)
                 print(f"Detected Read Layout: {layout}")
         elif proc.returncode not in (0, -15):
             raise RuntimeError(f"samtools view produced no output (rc={proc.returncode}): {stderr.strip()}")

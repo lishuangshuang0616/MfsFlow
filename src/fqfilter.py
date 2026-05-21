@@ -4,6 +4,11 @@ import subprocess
 import re
 import os
 
+from path_layout import tmp_merge_dir
+
+Q30_ASCII = 63
+Q30_TABLE = bytes(1 if i >= Q30_ASCII else 0 for i in range(256))
+
 def get_config(yaml_file):
     with open(yaml_file, 'r', encoding='utf-8') as f:
         return yaml.safe_load(f)
@@ -92,8 +97,8 @@ def fastq_iter(handle):
 
 def main():
     if len(sys.argv) < 6:
-        print("Usage: python3 fqfilter.py <yaml> <samtools> <pigz> <zumis_dir> <tmp_prefix> [--limit N]")
-        print("Legacy: python3 fqfilter.py <yaml> <samtools> <rscript> <pigz> <zumis_dir> <tmp_prefix> [--limit N]")
+        print("Usage: python3 fqfilter.py <yaml> <samtools> <pigz> <toolkit_dir> <tmp_prefix> [--limit N]")
+        print("Legacy: python3 fqfilter.py <yaml> <samtools> <rscript> <pigz> <toolkit_dir> <tmp_prefix> [--limit N]")
         sys.exit(1)
 
     args = sys.argv[1:]
@@ -120,7 +125,7 @@ def main():
         pigz = args[3]
         tmp_prefix = args[5]
     else:
-        raise SystemExit("Invalid arguments. Expected <yaml> <samtools> <pigz> <zumis_dir> <tmp_prefix> [--limit N].")
+        raise SystemExit("Invalid arguments. Expected <yaml> <samtools> <pigz> <toolkit_dir> <tmp_prefix> [--limit N].")
             
     config = get_config(yaml_file)
     project = config['project']
@@ -173,12 +178,38 @@ def main():
     else:
         umi_filter = list(map(int, str(config['filter_cutoffs']['UMI_filter']).split()))
     
-    out_bam = os.path.join(out_dir, "zUMIs_output/.tmpMerge", f"{project}{tmp_prefix}.raw.tagged.bam")
-    out_bc_stats = os.path.join(out_dir, "zUMIs_output/.tmpMerge", f"{project}{tmp_prefix}.BCstats.txt")
+    merge_dir = tmp_merge_dir(out_dir)
+    out_bam = os.path.join(merge_dir, f"{project}{tmp_prefix}.raw.tagged.bam")
+    out_bc_stats = os.path.join(merge_dir, f"{project}{tmp_prefix}.BCstats.txt")
+    out_q30_stats = os.path.join(merge_dir, f"{project}{tmp_prefix}.Q30stats.txt")
 
-    pigz_procs = []
-    handles = []
-    for f in filenames:
+    def split_names(name):
+        return [x.strip() for x in str(name).split(',') if x.strip()]
+
+    def make_read_groups():
+        groups = []
+        fastq_groups = config.get('fastq_groups') or []
+        if fastq_groups:
+            for row in fastq_groups:
+                groups.append({
+                    'files': [row['read1'], row['read2']],
+                    'fixed_bc': row['barcode'].encode('ascii'),
+                })
+            return groups
+
+        if len(filenames) < 2:
+            groups.append({'files': filenames, 'fixed_bc': None})
+            return groups
+
+        r1_files = split_names(filenames[0])
+        r2_files = split_names(filenames[1])
+        if len(r1_files) != len(r2_files):
+            raise ValueError(f"R1/R2 FASTQ count mismatch: {len(r1_files)} vs {len(r2_files)}")
+        for r1, r2 in zip(r1_files, r2_files):
+            groups.append({'files': [r1, r2], 'fixed_bc': None})
+        return groups
+
+    def open_chunk_handle(f, pigz_procs):
         base_name = os.path.basename(f)
         if base_name.endswith('.gz'):
             base_name = base_name[:-3]
@@ -188,155 +219,195 @@ def main():
             base_name = base_name[:-3]
             
         # Try finding the file with .gz extension first (default behavior)
-        chunk_path_gz = os.path.join(out_dir, "zUMIs_output/.tmpMerge", f"{base_name}{tmp_prefix}.gz")
-        chunk_path_plain = os.path.join(out_dir, "zUMIs_output/.tmpMerge", f"{base_name}{tmp_prefix}")
+        chunk_path_gz = os.path.join(merge_dir, f"{base_name}{tmp_prefix}.gz")
+        chunk_path_plain = os.path.join(merge_dir, f"{base_name}{tmp_prefix}")
         
         # Determine which file to use
         if os.path.exists(chunk_path_gz):
-            p = subprocess.Popen([pigz, '-p', '2', '-dc', chunk_path_gz], stdout=subprocess.PIPE, text=False, bufsize=1024*1024)
-            pigz_procs.append(p)
-            handles.append(p.stdout)
-        elif os.path.exists(chunk_path_plain):
-             # Uncompressed file: open directly
-             p = open(chunk_path_plain, 'rb')
-             handles.append(p)
-             # No process to wait for, but we need to match the cleanup logic
-             # We'll just not add anything to pigz_procs
-        else:
-             # Fallback or error: try expecting the prefix included the extension?
-             # For now assume failure if neither exists, but let the original logic fail or print error
-             sys.stderr.write(f"Error: Chunk file not found: {chunk_path_gz} or {chunk_path_plain}\n")
-             sys.exit(1)
-
-    iters = [fastq_iter(h) for h in handles]
+            proc = subprocess.Popen([pigz, '-p', '2', '-dc', chunk_path_gz], stdout=subprocess.PIPE, text=False, bufsize=1024*1024)
+            pigz_procs.append(proc)
+            return proc.stdout
+        if os.path.exists(chunk_path_plain):
+            return open(chunk_path_plain, 'rb')
+        return None
     
     bc_stats = {}
+    q30_stats = {}
+
+    def add_q30(label, qual):
+        if not qual or qual == b"*":
+            return
+        total_bases, q30_bases = q30_stats.get(label, (0, 0))
+        q30_stats[label] = (
+            total_bases + len(qual),
+            q30_bases + sum(qual.translate(Q30_TABLE)),
+        )
     
     out_bam_fh = open(out_bam, 'wb')
     samtools_proc = subprocess.Popen([samtools, 'view', '-Sb', '-'], stdin=subprocess.PIPE, stdout=out_bam_fh)
     bam_out = samtools_proc.stdin
 
     # PG Header
-    pg_line = f"@PG\tID:zUMIs-fqfilter\tPN:zUMIs-fqfilter\tVN:3.0\tCL:python3 fqfilter.py {' '.join(sys.argv[1:])}\n"
+    pg_line = f"@PG\tID:MhsFlow-fqfilter\tPN:MhsFlow-fqfilter\tVN:3.0\tCL:python3 fqfilter.py {' '.join(sys.argv[1:])}\n"
     bam_out.write(pg_line.encode("utf-8"))
 
     total = 0
     filtered = 0
     
+    processing_error = None
+
+    def check_qual(q_str, threshold_count, threshold_val):
+        # (q - 33) < threshold_val  =>  q < threshold_val + 33
+        limit = threshold_val + 33
+        low_quals = 0
+        for q in q_str:
+            if q < limit:
+                low_quals += 1
+                if low_quals >= threshold_count:
+                    return False
+        return True
+
+    def process_records(records, fixed_bc):
+        nonlocal total, filtered
+        if read_limit > 0 and total >= read_limit:
+            return False
+
+        total += 1
+
+        final_bc = b""
+        final_bc_q = b""
+        final_umi = b""
+        final_umi_q = b""
+        final_cdna1 = b""
+        final_cdna1_q = b""
+        final_cdna2 = b""
+        final_cdna2_q = b""
+
+        go_ahead = True
+        layout = "SE"
+
+        for i, (_header, seq, qual) in enumerate(records):
+            read_label = f"R{i + 1}"
+            add_q30(read_label, qual)
+
+            ss3_status = "yespattern"
+            pat = pattern_bytes[i] if i < len(pattern_bytes) else None
+            if pat is not None:
+                pat_seq, mm = pat
+                if pat_seq == b"ATTGCGCAATG":
+                    if hamming_distance(seq[:len(pat_seq)], pat_seq, limit=mm) <= mm:
+                        ss3_status = "yespattern"
+                    else:
+                        ss3_status = "nopattern"
+                else:
+                    if not seq.startswith(pat_seq):
+                        go_ahead = False
+
+            bc, bc_q, umi, umi_q, c1, c1_q = extract_seq(seq, qual, base_definitions[i], ss3_status == "nopattern")
+
+            add_q30(f"{read_label}_BC", bc_q)
+            add_q30(f"{read_label}_UMI", umi_q)
+            add_q30(f"{read_label}_cDNA", c1_q)
+            add_q30("BC", bc_q)
+            add_q30("UMI", umi_q)
+            add_q30("cDNA", c1_q)
+
+            final_bc += bc
+            final_bc_q += bc_q
+            final_umi += umi
+            final_umi_q += umi_q
+
+            if i == 0:
+                final_cdna1, final_cdna1_q = c1, c1_q
+            else:
+                final_cdna2, final_cdna2_q = c1, c1_q
+                layout = "PE"
+
+        if not go_ahead:
+            return True
+
+        if fixed_bc:
+            final_bc = fixed_bc
+            final_bc_q = b"I" * len(fixed_bc)
+
+        if not check_qual(final_bc_q, bc_filter[0], bc_filter[1]):
+            return True
+        if not check_qual(final_umi_q, umi_filter[0], umi_filter[1]):
+            return True
+
+        filtered += 1
+        bc_stats[final_bc] = bc_stats.get(final_bc, 0) + 1
+
+        rid = records[0][0].split()[0]
+        if rid.startswith(b'@'):
+            rid = rid[1:]
+
+        tags = (
+            b"\tCR:Z:" + final_bc +
+            b"\tUR:Z:" + final_umi +
+            b"\tCY:Z:" + final_bc_q +
+            b"\tUY:Z:" + final_umi_q +
+            b"\n"
+        )
+
+        seq1_out = final_cdna1 if final_cdna1 else b"*"
+        qual1_out = final_cdna1_q if final_cdna1_q else b"*"
+        seq2_out = final_cdna2 if final_cdna2 else b"*"
+        qual2_out = final_cdna2_q if final_cdna2_q else b"*"
+
+        if layout == "SE":
+            line = b"\t".join([
+                rid, b"4", b"*", b"0", b"0", b"*", b"*", b"0", b"0", seq1_out, qual1_out
+            ]) + tags
+            bam_out.write(line)
+        else:
+            line1 = b"\t".join([
+                rid, b"77", b"*", b"0", b"0", b"*", b"*", b"0", b"0", seq1_out, qual1_out
+            ]) + tags
+            line2 = b"\t".join([
+                rid, b"141", b"*", b"0", b"0", b"*", b"*", b"0", b"0", seq2_out, qual2_out
+            ]) + tags
+            bam_out.write(line1)
+            bam_out.write(line2)
+        return True
+
     try:
-        for records in zip(*iters):
+        for group in make_read_groups():
             if read_limit > 0 and total >= read_limit:
                 break
-                
-            total += 1
-            
-            # Record 0 is usually the one with BC/UMI in this pipeline's convention
-            # But we need to aggregate across all files as per perl script
-            
-            final_bc = b""
-            final_bc_q = b""
-            final_umi = b""
-            final_umi_q = b""
-            final_cdna1 = b""
-            final_cdna1_q = b""
-            final_cdna2 = b""
-            final_cdna2_q = b""
-            
-            go_ahead = True
-            layout = "SE"
-            
-            for i, (_header, seq, qual) in enumerate(records):
-                ss3_status = "yespattern"
-                pat = pattern_bytes[i] if i < len(pattern_bytes) else None
-                if pat is not None:
-                    pat_seq, mm = pat
-                    if pat_seq == b"ATTGCGCAATG":
-                        if hamming_distance(seq[:len(pat_seq)], pat_seq, limit=mm) <= mm:
-                            ss3_status = "yespattern"
-                        else:
-                            ss3_status = "nopattern"
-                            go_ahead = False
-                    else:
-                        if not seq.startswith(pat_seq):
-                            go_ahead = False
-                
-                # Extract parts
-                bc, bc_q, umi, umi_q, c1, c1_q = extract_seq(seq, qual, base_definitions[i], ss3_status == "nopattern")
-                
-                final_bc += bc
-                final_bc_q += bc_q
-                final_umi += umi
-                final_umi_q += umi_q
-                
-                if i == 0:
-                    final_cdna1, final_cdna1_q = c1, c1_q
-                else:
-                    final_cdna2, final_cdna2_q = c1, c1_q
-                    layout = "PE"
+            pigz_procs = []
+            handles = []
+            try:
+                for f in group['files']:
+                    handle = open_chunk_handle(f, pigz_procs)
+                    if handle is None:
+                        handles = []
+                        break
+                    handles.append(handle)
 
-            if not go_ahead:
-                continue
+                if not handles:
+                    for p in pigz_procs:
+                        p.wait()
+                    continue
 
-            # Quality filtering
-            def check_qual(q_str, threshold_count, threshold_val):
-                # Optimize: fail fast
-                # (q - 33) < threshold_val  =>  q < threshold_val + 33
-                limit = threshold_val + 33
-                low_quals = 0
-                for q in q_str:
-                    if q < limit:
-                        low_quals += 1
-                        if low_quals >= threshold_count:
-                            return False
-                return True
+                iters = [fastq_iter(h) for h in handles]
+                for records in zip(*iters):
+                    if not process_records(records, group.get('fixed_bc')):
+                        break
+            finally:
+                for h in handles:
+                    try:
+                        h.close()
+                    except Exception:
+                        pass
 
-            if not check_qual(final_bc_q, bc_filter[0], bc_filter[1]):
-                continue
-            if not check_qual(final_umi_q, umi_filter[0], umi_filter[1]):
-                continue
-            
-            # Success
-            filtered += 1
-            bc_stats[final_bc] = bc_stats.get(final_bc, 0) + 1
-            
-            rid = records[0][0].split()[0]
-            if rid.startswith(b'@'):
-                rid = rid[1:]
-            
-            tags = (
-                b"\tCR:Z:" + final_bc +
-                b"\tUR:Z:" + final_umi +
-                b"\tCY:Z:" + final_bc_q +
-                b"\tUY:Z:" + final_umi_q +
-                b"\n"
-            )
-            
-            # Ensure valid SAM fields for SEQ and QUAL
-            seq1_out = final_cdna1 if final_cdna1 else b"*"
-            qual1_out = final_cdna1_q if final_cdna1_q else b"*"
-            
-            if seq1_out != b"*" and qual1_out == b"*":
-                sys.stderr.write(f"DEBUG: R1 SEQ present but QUAL missing! ID: {rid}\n")
-            
-            seq2_out = final_cdna2 if final_cdna2 else b"*"
-            qual2_out = final_cdna2_q if final_cdna2_q else b"*"
-
-            if layout == "SE":
-                line = b"\t".join([
-                    rid, b"4", b"*", b"0", b"0", b"*", b"*", b"0", b"0", seq1_out, qual1_out
-                ]) + tags
-                bam_out.write(line)
-            else:
-                line1 = b"\t".join([
-                    rid, b"77", b"*", b"0", b"0", b"*", b"*", b"0", b"0", seq1_out, qual1_out
-                ]) + tags
-                line2 = b"\t".join([
-                    rid, b"141", b"*", b"0", b"0", b"*", b"*", b"0", b"0", seq2_out, qual2_out
-                ]) + tags
-                bam_out.write(line1)
-                bam_out.write(line2)
+                for p in pigz_procs:
+                    p.wait()
+                    if p.returncode not in (0, -13, 141):
+                        raise RuntimeError(f"pigz failed (rc={p.returncode}) while reading chunk(s) for prefix {tmp_prefix}")
 
     except Exception as e:
+        processing_error = e
         sys.stderr.write(f"Error: {e}\n")
     finally:
         try:
@@ -347,29 +418,22 @@ def main():
         samtools_proc.wait()
         out_bam_fh.close()
 
-        for h in handles:
-            try:
-                h.close()
-            except Exception:
-                pass
-
-        # We close the pipes above, so pigz might get SIGPIPE.
-        # This is expected behavior when we limit reads.
-        for p in pigz_procs:
-            p.wait()
-
         if samtools_proc.returncode != 0:
             raise RuntimeError(f"samtools failed (rc={samtools_proc.returncode}) writing {out_bam}")
 
-        for p in pigz_procs:
-            # Allow SIGPIPE (141 or -13)
-            if p.returncode not in (0, -13, 141):
-                raise RuntimeError(f"pigz failed (rc={p.returncode}) while reading chunk(s) for prefix {tmp_prefix}")
+    if processing_error is not None:
+        raise processing_error
 
     # Write BC stats
     with open(out_bc_stats, 'w') as f:
         for bc, count in bc_stats.items():
             f.write(f"{bc.decode('ascii')}\t{count}\n")
+
+    with open(out_q30_stats, 'w') as f:
+        f.write("metric\ttotal_bases\tq30_bases\n")
+        for metric in sorted(q30_stats):
+            total_bases, q30_bases = q30_stats[metric]
+            f.write(f"{metric}\t{total_bases}\t{q30_bases}\n")
 
 if __name__ == "__main__":
     main()
