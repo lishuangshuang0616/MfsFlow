@@ -5,7 +5,7 @@ import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from run_featurecounts import parse_gtf_and_create_saf
+from run_featurecounts import _best_intron_assignment, load_saf_interval_index, parse_gtf_and_create_saf
 
 
 class SafBuilderTests(unittest.TestCase):
@@ -52,6 +52,22 @@ class SafBuilderTests(unittest.TestCase):
 
             self.assertNotIn("short__INTRON__", content)
             self.assertNotIn("long__INTRON__", content)
+
+    def test_hybrid_intron_assignment_uses_intron_saf(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            saf = os.path.join(tmpdir, "introns.saf")
+            with open(saf, "w") as f:
+                f.write("GeneID\tChr\tStart\tEnd\tStrand\n")
+                f.write("geneA__INTRON__\tchr1\t121\t149\t+\n")
+                f.write("geneB__INTRON__\tchr1\t200\t230\t-\n")
+
+            index, starts = load_saf_interval_index(saf)
+
+            gene, category = _best_intron_assignment("chr1", [(124, 130)], 0, False, index, starts)
+            self.assertEqual((gene, category), ("geneA", "Intron"))
+
+            gene, category = _best_intron_assignment("chr1", [(124, 130)], 1, True, index, starts)
+            self.assertEqual((gene, category), (None, "Intergenic"))
 
 
 if __name__ == "__main__":

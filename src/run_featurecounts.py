@@ -10,6 +10,7 @@ import bisect
 import math
 import collections
 import gzip
+import glob
 
 from path_layout import expression_dir, stats_dir
 
@@ -457,6 +458,104 @@ def run_featurecounts_r_order(featurecounts_exec, input_bam, exon_saf, intron_sa
         os.remove(exon_bam)
     return intron_bam
 
+
+def cleanup_featurecounts_intermediates(input_bams):
+    for input_bam in input_bams:
+        if not input_bam:
+            continue
+        for path in glob.glob(f"{input_bam}.fc*"):
+            if os.path.exists(path):
+                os.remove(path)
+
+
+_INTRON_BIN_SIZE = 100000
+
+
+def load_saf_interval_index(saf_file):
+    index = collections.defaultdict(list)
+    if not saf_file or not os.path.exists(saf_file):
+        return {}, {}
+    with open(saf_file, "r", encoding="utf-8") as handle:
+        reader = csv.DictReader(handle, delimiter="\t")
+        for row in reader:
+            gene_id = str(row.get("GeneID") or "").strip()
+            chrom = str(row.get("Chr") or "").strip()
+            strand = str(row.get("Strand") or ".").strip() or "."
+            if not gene_id or not chrom:
+                continue
+            if "__INTRON__" in gene_id:
+                gene_id = gene_id.split("__INTRON__")[0]
+            try:
+                start = int(row["Start"]) - 1
+                end = int(row["End"])
+            except Exception:
+                continue
+            if start < end:
+                first_bin = start // _INTRON_BIN_SIZE
+                last_bin = (end - 1) // _INTRON_BIN_SIZE
+                for bin_id in range(first_bin, last_bin + 1):
+                    index[(chrom, strand, bin_id)].append((start, end, gene_id))
+
+    for values in index.values():
+        values.sort()
+    return dict(index), {}
+
+
+def _candidate_introns(chrom, strand_mode, is_reverse, intron_index):
+    if strand_mode == 1:
+        strands = ["-" if is_reverse else "+"]
+    elif strand_mode == 2:
+        strands = ["+" if is_reverse else "-"]
+    else:
+        strands = ["+", "-", "."]
+    return [(chrom, strand) for strand in strands]
+
+
+def _best_intron_assignment(chrom, blocks, strand_mode, is_reverse, intron_index, intron_starts):
+    overlaps = collections.defaultdict(int)
+    seen = set()
+    for chrom_strand in _candidate_introns(chrom, strand_mode, is_reverse, intron_index):
+        for block_start, block_end in blocks:
+            first_bin = block_start // _INTRON_BIN_SIZE
+            last_bin = (block_end - 1) // _INTRON_BIN_SIZE
+            for bin_id in range(first_bin, last_bin + 1):
+                key = (chrom_strand[0], chrom_strand[1], bin_id)
+                for intron_start, intron_end, gene_id in intron_index.get(key, ()):
+                    interval_key = (chrom_strand[0], chrom_strand[1], intron_start, intron_end, gene_id, block_start, block_end)
+                    if interval_key in seen:
+                        continue
+                    seen.add(interval_key)
+                    ov = min(block_end, intron_end) - max(block_start, intron_start)
+                    if ov > 0:
+                        overlaps[gene_id] += ov
+    if not overlaps:
+        return None, "Intergenic"
+    ranked = sorted(overlaps.items(), key=lambda item: (-item[1], item[0]))
+    if len(ranked) > 1 and ranked[0][1] == ranked[1][1]:
+        return None, "Ambiguity"
+    return ranked[0][0], "Intron"
+
+
+def _sam_blocks(pos_1based, cigar):
+    blocks = []
+    if not cigar or cigar == "*":
+        return blocks
+    curr_pos = int(pos_1based) - 1
+    num = 0
+    for ch in cigar:
+        if ch.isdigit():
+            num = num * 10 + int(ch)
+            continue
+        if ch in "M=X":
+            blocks.append((curr_pos, curr_pos + num))
+            curr_pos += num
+        elif ch in "DN":
+            curr_pos += num
+        elif ch in "ISH":
+            pass
+        num = 0
+    return blocks
+
 def process_bam_and_calculate_stats(
     input_bam,
     out_bam,
@@ -467,6 +566,9 @@ def process_bam_and_calculate_stats(
     gene_models=None,
     collect_coverage=True,
     output_handle=None,
+    intron_index=None,
+    intron_starts=None,
+    strand_mode=0,
 ):
     """
     Processes a single BAM from Combined SAF featureCounts.
@@ -482,6 +584,8 @@ def process_bam_and_calculate_stats(
     cov_arr = [0] * 100
     cov_count = 0
     MAX_COV_READS = 5000000
+    intron_index = intron_index or {}
+    intron_starts = intron_starts or {}
 
     def update_stats(read_obj, category, source_lbl):
         bc = None
@@ -629,8 +733,23 @@ def process_bam_and_calculate_stats(
                                  pass
 
                         if status == "NoFeatures":
-                             final_read.set_tag('RE', 'I')
-                             category = "Intergenic"
+                             intron_gene, intron_category = _best_intron_assignment(
+                                 final_read.reference_name,
+                                 final_read.get_blocks(),
+                                 strand_mode,
+                                 final_read.is_reverse,
+                                 intron_index,
+                                 intron_starts,
+                             ) if intron_index and not final_read.is_unmapped else (None, "Intergenic")
+                             if intron_gene:
+                                 final_read.set_tag('GX', intron_gene)
+                                 final_read.set_tag('RE', 'N')
+                                 category = "Intron"
+                             elif intron_category == "Ambiguity":
+                                 category = "Ambiguity"
+                             else:
+                                 final_read.set_tag('RE', 'I')
+                                 category = "Intergenic"
                         elif read.is_unmapped:
                              category = "Unmapped"
                         else:
@@ -707,8 +826,26 @@ def process_bam_and_calculate_stats(
                 if reason and "Unassigned_" in reason:
                     status = reason.replace("Unassigned_", "")
                     if status == "NoFeatures":
-                        final_line = line.rstrip() + "\tRE:Z:I"
-                        category = "Intergenic"
+                        parts = line.rstrip().split('\t')
+                        flag = int(parts[1])
+                        blocks = _sam_blocks(int(parts[3]), parts[5])
+                        intron_gene, intron_category = _best_intron_assignment(
+                            parts[2],
+                            blocks,
+                            strand_mode,
+                            (flag & 0x10) != 0,
+                            intron_index,
+                            intron_starts,
+                        ) if intron_index and not (flag & 0x4) else (None, "Intergenic")
+                        if intron_gene:
+                            final_line = line.rstrip() + f"\tGX:Z:{intron_gene}\tRE:Z:N"
+                            category = "Intron"
+                        elif intron_category == "Ambiguity":
+                            final_line = line.rstrip()
+                            category = "Ambiguity"
+                        else:
+                            final_line = line.rstrip() + "\tRE:Z:I"
+                            category = "Intergenic"
                     else:
                         final_line = line.rstrip()
                         category = status
@@ -892,40 +1029,73 @@ def main():
             dest_cov[i] += src_cov[i]
 
     count_introns = bool(counting_opts.get("introns", True))
+    featurecounts_strategy = str(counting_opts.get("featurecounts_strategy", "hybrid")).strip().lower()
+    use_r_order = featurecounts_strategy in {"r", "r_order", "two_pass", "exact"}
+    intron_index, intron_starts = ({}, {})
+    if count_introns and not use_r_order:
+        intron_index, intron_starts = load_saf_interval_index(saf_paths["intron"])
+        print(
+            f"Using hybrid counting: exon featureCounts + Python intron assignment "
+            f"({sum(len(v) for v in intron_index.values())} intron intervals)."
+        )
+    elif use_r_order:
+        print("Using R-order counting: exon featureCounts followed by intron featureCounts.")
 
     # Process Internal (Strand 0)
     if os.path.exists(internal_bam):
         print("Running featureCounts for Internal Reads...")
         fc_prefix_int = internal_bam + ".fc"
-        fc_out_int = run_featurecounts_r_order(
-            featurecounts_exec,
-            internal_bam,
-            saf_paths["exon"],
-            saf_paths["intron"],
-            fc_prefix_int,
-            num_threads,
-            0,
-            "Internal",
-            count_introns=count_introns,
-        )
-        fc_outputs.append(("Internal", fc_out_int))
+        if use_r_order:
+            fc_out_int = run_featurecounts_r_order(
+                featurecounts_exec,
+                internal_bam,
+                saf_paths["exon"],
+                saf_paths["intron"],
+                fc_prefix_int,
+                num_threads,
+                0,
+                "Internal",
+                count_introns=count_introns,
+            )
+        else:
+            fc_out_int = run_featurecounts_cmd(
+                featurecounts_exec,
+                internal_bam,
+                saf_paths["exon"],
+                f"{fc_prefix_int}.exon",
+                num_threads,
+                0,
+                "Internal_Exon",
+            )
+        fc_outputs.append(("Internal", fc_out_int, 0))
 
     # Process UMI (Strand 1)
     if os.path.exists(umi_bam):
         print("Running featureCounts for UMI Reads...")
         fc_prefix_umi = umi_bam + ".fc"
-        fc_out_umi = run_featurecounts_r_order(
-            featurecounts_exec,
-            umi_bam,
-            saf_paths["exon"],
-            saf_paths["intron"],
-            fc_prefix_umi,
-            num_threads,
-            1,
-            "UMI",
-            count_introns=count_introns,
-        )
-        fc_outputs.append(("UMI", fc_out_umi))
+        if use_r_order:
+            fc_out_umi = run_featurecounts_r_order(
+                featurecounts_exec,
+                umi_bam,
+                saf_paths["exon"],
+                saf_paths["intron"],
+                fc_prefix_umi,
+                num_threads,
+                1,
+                "UMI",
+                count_introns=count_introns,
+            )
+        else:
+            fc_out_umi = run_featurecounts_cmd(
+                featurecounts_exec,
+                umi_bam,
+                saf_paths["exon"],
+                f"{fc_prefix_umi}.exon",
+                num_threads,
+                1,
+                "UMI_Exon",
+            )
+        fc_outputs.append(("UMI", fc_out_umi, 1))
 
     if not fc_outputs:
         print("Error: No BAMs processed.")
@@ -940,11 +1110,13 @@ def main():
         print(f"Writing final GeneTagged BAM directly: {final_bam}")
         with pysam.AlignmentFile(fc_outputs[0][1], "rb", threads=int(num_threads)) as template_in:
             with pysam.AlignmentFile(final_bam, "wb", template=template_in, threads=int(num_threads)) as final_out:
-                for source_label, fc_bam in fc_outputs:
+                for source_label, fc_bam, fc_strand_mode in fc_outputs:
                     r_stats, cov = process_bam_and_calculate_stats(
                         fc_bam, final_bam, samtools_exec, num_threads,
                         gene_map, source_label=source_label, gene_models=gene_models,
                         collect_coverage=collect_coverage, output_handle=final_out,
+                        intron_index=intron_index, intron_starts=intron_starts,
+                        strand_mode=fc_strand_mode,
                     )
                     merge_stats(total_read_stats, r_stats)
                     if source_label == "UMI":
@@ -955,12 +1127,14 @@ def main():
     else:
         print("pysam unavailable for direct final BAM writing; falling back to intermediate BAM merge.")
         bams_to_merge = []
-        for source_label, fc_bam in fc_outputs:
+        for source_label, fc_bam, fc_strand_mode in fc_outputs:
             processed_bam = fc_bam + ".processed.bam"
             r_stats, cov = process_bam_and_calculate_stats(
                 fc_bam, processed_bam, samtools_exec, num_threads,
                 gene_map, source_label=source_label, gene_models=gene_models,
                 collect_coverage=collect_coverage,
+                intron_index=intron_index, intron_starts=intron_starts,
+                strand_mode=fc_strand_mode,
             )
             merge_stats(total_read_stats, r_stats)
             if source_label == "UMI":
@@ -979,6 +1153,8 @@ def main():
             for b in bams_to_merge:
                 if os.path.exists(b):
                     os.remove(b)
+
+    cleanup_featurecounts_intermediates([umi_bam, internal_bam])
 
     # Save Stats
     stats_out = os.path.join(stats_dir(out_dir), f"{project}.read_stats.json")
