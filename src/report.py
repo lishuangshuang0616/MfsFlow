@@ -6,7 +6,7 @@ from pathlib import Path
 from string import Template
 import re
 
-from path_layout import config_dir, expression_dir, outputs_dir, stats_dir
+from path_layout import barcode_dir, config_dir, expression_dir, outputs_dir, stats_dir
 
 # Hardcoded version since src/__init__.py might not exist
 __version__ = "1.0.0"
@@ -185,7 +185,8 @@ def _process_barcode_report_data(sample_outdir, combined_context, config):
     if not isinstance(records, list):
         records = []
 
-    sample_type = str((config.get("sample") or {}).get("sample_type") or "").strip().lower()
+    configured_sample_type = str((config.get("sample") or {}).get("sample_type") or "").strip().lower()
+    sample_type = str(combined_context.get("sample_type") or configured_sample_type).strip().lower()
     barcode_source = str(config.get("barcode_source") or "").strip()
     expected_rows = _load_expected_barcode_rows(sample_outdir)
     expected_by_well = {row["wellID"]: row for row in expected_rows if row.get("wellID")}
@@ -276,6 +277,7 @@ def _process_barcode_report_data(sample_outdir, combined_context, config):
     expected_count = len(expected_rows) if expected_rows else len(records)
     summary = {
         "sample_type": sample_type or "unknown",
+        "configured_sample_type": configured_sample_type or "unknown",
         "sample_type_label": {"auto": "Auto 384-well plate", "manual": "Manual samples", "custom": "Custom barcode set"}.get(sample_type, sample_type or "Unknown"),
         "barcode_source": barcode_source,
         "expected_wells": expected_count,
@@ -318,6 +320,70 @@ def _process_barcode_report_data(sample_outdir, combined_context, config):
     combined_context["barcode_mode_cards_data"] = json.dumps(cards)
     combined_context["manual_barcode_table_data"] = json.dumps(manual_rows)
     combined_context["auto_plate_summary_data"] = json.dumps(plate_rows)
+
+
+def _read_discovered_sample_type(sample_outdir):
+    candidates = []
+    try:
+        bc_dir = Path(barcode_dir(sample_outdir))
+        candidates.extend(sorted(bc_dir.glob("*.barcode_discovery.tsv")))
+    except Exception:
+        pass
+    if not candidates:
+        try:
+            candidates.extend(sorted(Path(sample_outdir).rglob("*.barcode_discovery.tsv")))
+        except Exception:
+            pass
+
+    for path in candidates:
+        in_summary = False
+        try:
+            with open(path, "r", encoding="utf-8") as handle:
+                reader = None
+                for line in handle:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    if line == "[summary]":
+                        in_summary = True
+                        reader = None
+                        continue
+                    if line.startswith("[") and line != "[summary]":
+                        in_summary = False
+                        continue
+                    if not in_summary:
+                        continue
+                    if reader is None:
+                        reader = line.split("\t")
+                        continue
+                    values = line.split("\t")
+                    row = dict(zip(reader, values))
+                    sample_type = str(row.get("candidate_type") or "").strip().lower()
+                    if sample_type in ("auto", "manual"):
+                        return sample_type
+        except Exception:
+            continue
+    return ""
+
+
+def _select_report_template(sample_type, sample_outdir, template_dir, config=None):
+    sample_type = str(sample_type or "").strip().lower()
+    template_auto = template_dir / "template_auto.html"
+    template_manual = template_dir / "template_manual.html"
+
+    sample_cfg = (config or {}).get("sample") or {}
+    discovered_type = str(sample_cfg.get("discovered_sample_type") or "").strip().lower()
+    if discovered_type in ("auto", "manual"):
+        report_mode = discovered_type
+    elif sample_type in ("auto", "manual"):
+        report_mode = sample_type
+    elif sample_type == "discover":
+        report_mode = _read_discovered_sample_type(sample_outdir) or "auto"
+    else:
+        report_mode = "manual"
+
+    template_path = template_auto if report_mode == "auto" else template_manual
+    return template_path, report_mode
 
 
 def _count_lines_in_tsv_gz(path):
@@ -798,15 +864,12 @@ def generate_multi_report(name, outdir, config):
     # Locate template. Auto and manual reports use separate templates because
     # 384-well plate QC and low-sample manual summaries have different layouts.
     template_dir = Path(__file__).parent.parent / 'report'
-    template_by_type = {
-        "auto": template_dir / "template_auto.html",
-        "manual": template_dir / "template_manual.html",
-    }
-    template_path = template_by_type.get(sample_type, template_dir / 'template_multi.html')
+    template_path, report_mode = _select_report_template(sample_type, sample_outdir, template_dir, config)
     
     if not template_path.exists():
         print(f"Error: Template not found at {template_path}")
         return
+    print(f"Using report template: {template_path.name} (mode={report_mode}, configured={sample_type or 'unknown'})")
 
     with open(template_path, 'r', encoding='utf-8') as f:
         template_str = f.read()
@@ -819,7 +882,8 @@ def generate_multi_report(name, outdir, config):
     # Add sample name and version
     combined_context['samplename'] = name
     combined_context['version'] = __version__
-    combined_context["sample_type"] = sample_type
+    combined_context["sample_type"] = report_mode
+    combined_context["configured_sample_type"] = sample_type
     combined_context["_run_config"] = config
     combined_context["vdj_t_target_enabled"] = "false"
     combined_context["vdj_b_target_enabled"] = "false"

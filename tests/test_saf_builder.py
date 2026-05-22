@@ -20,6 +20,8 @@ class SafBuilderTests(unittest.TestCase):
 
             saf, gene_map = parse_gtf_and_create_saf(gtf, os.path.join(tmpdir, "sample"))
             self.assertEqual(gene_map["geneA"], "A")
+            self.assertTrue(os.path.exists(os.path.join(tmpdir, "sample.exon.saf")))
+            self.assertTrue(os.path.exists(os.path.join(tmpdir, "sample.intron.saf")))
 
             with open(saf) as f:
                 lines = [line.strip().split("\t") for line in f if not line.startswith("GeneID")]

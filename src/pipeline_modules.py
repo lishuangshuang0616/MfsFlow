@@ -23,7 +23,18 @@ def run_shell_cmd(cmd, step_name, log_file=None):
     if process.returncode != 0:
         raise Exception(f"Error in step [{step_name}]. Command failed: {cmd_str}")
 
-def split_fastq(fq_files, n_threads, lines_per_chunk, out_dir, project, pigz_exec="pigz", seqkit_exec="seqkit", fq2_files=None, compress_chunks=False):
+def split_fastq(
+    fq_files,
+    n_threads,
+    lines_per_chunk,
+    out_dir,
+    project,
+    pigz_exec="pigz",
+    seqkit_exec="seqkit",
+    fq2_files=None,
+    compress_chunks=False,
+    split_parts=None,
+):
     """
     Splits FastQ files.
     Optimizations:
@@ -50,6 +61,8 @@ def split_fastq(fq_files, n_threads, lines_per_chunk, out_dir, project, pigz_exe
     # Check if files are gzipped
     is_gzipped = fq_files[0].endswith('.gz')
     
+    split_parts = max(1, int(split_parts or n_threads))
+
     # Determine concurrency
     # We want to run multiple split jobs in parallel if we have multiple files
     # Each job consumes some threads (pigz -dc + split + pigz).
@@ -70,7 +83,12 @@ def split_fastq(fq_files, n_threads, lines_per_chunk, out_dir, project, pigz_exe
         if len(fq_files) != len(fq2_files):
              raise ValueError(f"Mismatch in R1/R2 file counts: {len(fq_files)} vs {len(fq2_files)}")
     
-    print(f"Splitting {len(fq_files)} files ({mode}). Method: {'SeqKit' if has_seqkit else 'GNU Split'}. Parallel Jobs: {num_concurrent_jobs}. Compress Output: {compress_chunks}")
+    print(
+        f"Splitting {len(fq_files)} files ({mode}). "
+        f"Method: {'SeqKit' if has_seqkit else 'GNU Split'}. "
+        f"Parts: {split_parts}. Parallel Jobs: {num_concurrent_jobs}. "
+        f"Compress Output: {compress_chunks}"
+    )
 
     # Prepare suffixes list to return
     # We need to collect ALL suffixes generated.
@@ -121,9 +139,9 @@ def split_fastq(fq_files, n_threads, lines_per_chunk, out_dir, project, pigz_exe
         cmd = ""
         if has_seqkit:
             # seqkit split2 -p N (by parts)
-            # The user requested splitting by thread count directly.
-            # We split each file into n_threads parts.
-            # This ensures maximum parallelism for downstream steps even if files differ in size.
+            # Split parts are tuned independently from total CPU threads.  This
+            # keeps downstream fqfilter parallelism balanced without producing
+            # excessive temporary FASTQ chunks.
             # Note: -p triggers 2-pass reading (counting then splitting), but it's robust.
             
             # Distribute threads among concurrent jobs
@@ -135,11 +153,10 @@ def split_fastq(fq_files, n_threads, lines_per_chunk, out_dir, project, pigz_exe
             
             if mode == "PE":
                 # PE Split
-                # -p n_threads
-                cmd = f"{seqkit_cmd} split2 -p {n_threads} -1 {shlex.quote(fpath1)} -2 {shlex.quote(fpath2)} -O {shlex.quote(out_dir)} -f -j {seqkit_threads} {ext_flag}"
+                cmd = f"{seqkit_cmd} split2 -p {split_parts} -1 {shlex.quote(fpath1)} -2 {shlex.quote(fpath2)} -O {shlex.quote(out_dir)} -f -j {seqkit_threads} {ext_flag}"
             else:
                 # SE Split
-                cmd = f"{seqkit_cmd} split2 -p {n_threads} -O {shlex.quote(out_dir)} -f {shlex.quote(fpath1)} -j {seqkit_threads} {ext_flag}"
+                cmd = f"{seqkit_cmd} split2 -p {split_parts} -O {shlex.quote(out_dir)} -f {shlex.quote(fpath1)} -j {seqkit_threads} {ext_flag}"
         
         else:
             # GNU split Fallback

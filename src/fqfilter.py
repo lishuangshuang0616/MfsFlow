@@ -97,12 +97,14 @@ def fastq_iter(handle):
 
 def main():
     if len(sys.argv) < 6:
-        print("Usage: python3 fqfilter.py <yaml> <samtools> <pigz> <toolkit_dir> <tmp_prefix> [--limit N]")
-        print("Legacy: python3 fqfilter.py <yaml> <samtools> <rscript> <pigz> <toolkit_dir> <tmp_prefix> [--limit N]")
+        print("Usage: python3 fqfilter.py <yaml> <samtools> <pigz> <toolkit_dir> <tmp_prefix> [--limit N] [--pigz-threads N] [--samtools-threads N]")
+        print("Legacy: python3 fqfilter.py <yaml> <samtools> <rscript> <pigz> <toolkit_dir> <tmp_prefix> [--limit N] [--pigz-threads N] [--samtools-threads N]")
         sys.exit(1)
 
     args = sys.argv[1:]
     read_limit = 0
+    pigz_threads = 1
+    samtools_threads = 1
     if '--limit' in args:
         try:
             idx = args.index('--limit')
@@ -110,6 +112,20 @@ def main():
             args = args[:idx] + args[idx + 2:]
         except Exception:
             read_limit = 0
+    if '--pigz-threads' in args:
+        try:
+            idx = args.index('--pigz-threads')
+            pigz_threads = max(1, int(args[idx + 1]))
+            args = args[:idx] + args[idx + 2:]
+        except Exception:
+            pigz_threads = 1
+    if '--samtools-threads' in args:
+        try:
+            idx = args.index('--samtools-threads')
+            samtools_threads = max(1, int(args[idx + 1]))
+            args = args[:idx] + args[idx + 2:]
+        except Exception:
+            samtools_threads = 1
 
     yaml_file = args[0]
     samtools = args[1]
@@ -224,7 +240,7 @@ def main():
         
         # Determine which file to use
         if os.path.exists(chunk_path_gz):
-            proc = subprocess.Popen([pigz, '-p', '2', '-dc', chunk_path_gz], stdout=subprocess.PIPE, text=False, bufsize=1024*1024)
+            proc = subprocess.Popen([pigz, '-p', str(pigz_threads), '-dc', chunk_path_gz], stdout=subprocess.PIPE, text=False, bufsize=1024*1024)
             pigz_procs.append(proc)
             return proc.stdout
         if os.path.exists(chunk_path_plain):
@@ -244,7 +260,11 @@ def main():
         )
     
     out_bam_fh = open(out_bam, 'wb')
-    samtools_proc = subprocess.Popen([samtools, 'view', '-Sb', '-'], stdin=subprocess.PIPE, stdout=out_bam_fh)
+    samtools_proc = subprocess.Popen(
+        [samtools, 'view', '-@', str(samtools_threads), '-Sb', '-'],
+        stdin=subprocess.PIPE,
+        stdout=out_bam_fh,
+    )
     bam_out = samtools_proc.stdin
 
     # PG Header

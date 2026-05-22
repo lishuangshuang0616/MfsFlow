@@ -55,6 +55,52 @@ def get_bam_read_length(bam_file, samtools, n_reads=1000):
     return lengths.most_common(1)[0][0]
 
 
+def get_stream_corrected_read_length(bam_files, bc_bin_file, expect_id_file, target_type, n_reads=1000):
+    """
+    Estimate read length after the same streaming barcode correction used before STAR.
+    This preserves STAR sjdbOverhang behavior when raw tagged chunks are streamed
+    directly instead of pre-writing corrected UMI/internal BAM chunks.
+    """
+    try:
+        import pysam
+        from barcode_corrector import correct_read_barcode, load_bc_map, load_id_map
+    except ImportError:
+        return 0
+
+    bc_map = load_bc_map(bc_bin_file)
+    id_map, internal_bcs = load_id_map(expect_id_file, strict=True)
+    lengths = collections.Counter()
+    seen = 0
+
+    for bam_file in bam_files:
+        try:
+            bam = pysam.AlignmentFile(bam_file, "rb", check_sq=False)
+        except Exception:
+            continue
+        with bam:
+            for read in bam:
+                correction = correct_read_barcode(read, bc_map, id_map, internal_bcs)
+                if correction is None:
+                    if target_type != "umi":
+                        continue
+                else:
+                    if target_type == "umi" and correction.is_internal:
+                        continue
+                    if target_type == "internal" and not correction.is_internal:
+                        continue
+
+                query_sequence = read.query_sequence
+                if query_sequence:
+                    lengths[len(query_sequence)] += 1
+                    seen += 1
+                    if seen >= n_reads:
+                        return lengths.most_common(1)[0][0]
+
+    if not lengths:
+        return 0
+    return lengths.most_common(1)[0][0]
+
+
 def get_dir_size_gb(path):
     try:
         out = subprocess.check_output(['du', '-sk', path], text=True).split('\t', 1)[0]
@@ -62,6 +108,37 @@ def get_dir_size_gb(path):
         return kb / (1024 * 1024)
     except Exception:
         return 25.0
+
+
+def read_star_index_params(star_index):
+    params = {}
+    param_file = os.path.join(star_index, "genomeParameters.txt")
+    if not os.path.exists(param_file):
+        return params
+
+    with open(param_file, "r") as handle:
+        for raw_line in handle:
+            line = raw_line.strip()
+            if not line:
+                continue
+            if "\t" in line:
+                key, value = line.split("\t", 1)
+            else:
+                parts = line.split(None, 1)
+                if len(parts) != 2:
+                    continue
+                key, value = parts
+            params[key.strip()] = value.strip()
+    return params
+
+
+def star_index_has_embedded_sjdb(index_params):
+    for key in ("sjdbGTFfile", "sjdbFileChrStartEnd", "sjdbInsertSave"):
+        value = index_params.get(key, "")
+        if value and value not in ("-", "None", "0"):
+            return True
+    overhang = index_params.get("sjdbOverhang", "")
+    return bool(overhang and overhang not in ("-", "None", "0"))
 
 def setup_gtf(config, project, out_dir, samtools):
     # Handle additional files
@@ -195,30 +272,56 @@ def main():
 
     # 2. Setup GTF
     final_gtf, param_add_fa = setup_gtf(config, project, out_dir, samtools)
-    
-    # 3. Determine Read Length (Use first available UMI bam)
+    star_index_params = read_star_index_params(star_index)
+    index_has_sjdb = star_index_has_embedded_sjdb(star_index_params)
+
+    # Define paths for corrector
+    corrector_script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "stream_corrector.py")
+    bc_bin_file = os.path.join(barcode_dir(out_dir), f"{project}.BCbinning.txt")
+    if not os.path.exists(bc_bin_file):
+        bc_bin_file = os.devnull
+
+    # 3. Determine Read Length (after correction if raw chunks are streamed)
     read_len = 0
-    if umi_bams:
+    streams_raw_chunks = any(os.path.basename(x).endswith(".raw.tagged.bam") for x in (umi_bams + internal_bams))
+    if streams_raw_chunks and umi_bams:
+        read_len = get_stream_corrected_read_length(umi_bams, bc_bin_file, expect_id_file, "umi")
+    if read_len <= 0 and streams_raw_chunks and internal_bams:
+        read_len = get_stream_corrected_read_length(internal_bams, bc_bin_file, expect_id_file, "internal")
+    if read_len <= 0 and umi_bams:
         read_len = get_bam_read_length(umi_bams[0], samtools)
-    elif internal_bams:
+    elif read_len <= 0 and internal_bams:
         read_len = get_bam_read_length(internal_bams[0], samtools)
-        
+
     print(f"Detected Read Length: {read_len}")
-    
+    if index_has_sjdb:
+        print("Detected STAR index already contains sjdb/GTF annotation; skipping on-the-fly --sjdbGTFfile injection.")
+    else:
+        print("Detected STAR index without embedded sjdb annotation; enabling on-the-fly --sjdbGTFfile injection.")
+
     # 4. Resource Allocation
     print(f"Allocating {num_threads} threads for sequential execution.")
 
     # 5. Build STAR Commands
     read_layout = config.get('read_layout', 'SE')
     
-    # Define paths for corrector
-    corrector_script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "stream_corrector.py")
-    bc_bin_file = os.path.join(barcode_dir(out_dir), f"{project}.BCbinning.txt")
-    
     # Base params (Common)
     # Important: readFilesType SAM because our corrector outputs uncompressed BAM (which STAR treats as SAM/BAM stream)
     # STAR auto-detects BAM vs SAM if we say SAM usually, or we can use BAM Unsorted
-    misc_base = f"--genomeDir {star_index} --sjdbGTFfile {final_gtf} --runThreadN {num_threads} --sjdbOverhang {read_len - 1} --readFilesType SAM {read_layout} --outSAMmultNmax 1 --outFilterMultimapNmax 50 --outSAMunmapped Within --outSAMtype BAM Unsorted --limitOutSJcollapsed 5000000"
+    misc_parts = [
+        f"--genomeDir {star_index}",
+        f"--runThreadN {num_threads}",
+        f"--readFilesType SAM {read_layout}",
+        "--outSAMmultNmax 1",
+        "--outFilterMultimapNmax 50",
+        "--outSAMunmapped Within",
+        "--outSAMtype BAM Unsorted",
+        "--limitOutSJcollapsed 5000000",
+    ]
+    if not index_has_sjdb:
+        misc_parts.insert(1, f"--sjdbGTFfile {final_gtf}")
+        misc_parts.insert(2, f"--sjdbOverhang {read_len - 1}")
+    misc_base = " ".join(misc_parts)
     
     extra_params = config['reference'].get('additional_STAR_params', '') or ""
     

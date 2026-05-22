@@ -346,11 +346,17 @@ def parse_gtf_and_create_saf(gtf_file, out_prefix, valid_chroms=None):
     print(f"Loaded {len(genes)} genes. Generating Combined SAF file...")
     
     combined_saf_path = f"{out_prefix}.combined.saf"
+    exon_saf_path = f"{out_prefix}.exon.saf"
+    intron_saf_path = f"{out_prefix}.intron.saf"
     introns_by_gene = _build_introns_like_r(genes)
     
-    with open(combined_saf_path, 'w') as f_out:
+    with open(combined_saf_path, 'w') as f_out, \
+         open(exon_saf_path, 'w') as f_exon, \
+         open(intron_saf_path, 'w') as f_intron:
         header = "GeneID\tChr\tStart\tEnd\tStrand\n"
         f_out.write(header)
+        f_exon.write(header)
+        f_intron.write(header)
         
         for gene_id, data in genes.items():
             chrom = data['chrom']
@@ -359,12 +365,24 @@ def parse_gtf_and_create_saf(gtf_file, out_prefix, valid_chroms=None):
             
             # Write Exons
             for start, end in merged:
-                f_out.write(f"{gene_id}\t{chrom}\t{start}\t{end}\t{strand}\n")
+                line = f"{gene_id}\t{chrom}\t{start}\t{end}\t{strand}\n"
+                f_out.write(line)
+                f_exon.write(line)
             
             for intron_start, intron_end in introns_by_gene.get(gene_id, []):
-                f_out.write(f"{gene_id}__INTRON__\t{chrom}\t{intron_start}\t{intron_end}\t{strand}\n")
+                line = f"{gene_id}__INTRON__\t{chrom}\t{intron_start}\t{intron_end}\t{strand}\n"
+                f_out.write(line)
+                f_intron.write(line)
 
     return combined_saf_path, gene_id_to_name
+
+
+def saf_paths_from_prefix(out_prefix):
+    return {
+        "combined": f"{out_prefix}.combined.saf",
+        "exon": f"{out_prefix}.exon.saf",
+        "intron": f"{out_prefix}.intron.saf",
+    }
 
 def run_featurecounts_cmd(featurecounts_exec, input_bam, saf_file, out_prefix, threads, strand_mode, feature_type):
     """
@@ -383,6 +401,7 @@ def run_featurecounts_cmd(featurecounts_exec, input_bam, saf_file, out_prefix, t
         '-R', 'BAM',
         '-s', str(strand_mode),
         '-p',                # Enable Paired-End mode
+        '-C',
         '--primary',
         '-Q', '0',
         input_bam
@@ -404,7 +423,51 @@ def run_featurecounts_cmd(featurecounts_exec, input_bam, saf_file, out_prefix, t
     
     return target_bam
 
-def process_bam_and_calculate_stats(input_bam, out_bam, samtools_exec, threads=4, gene_map=None, source_label=None, gene_models=None):
+
+def run_featurecounts_r_order(featurecounts_exec, input_bam, exon_saf, intron_saf, out_prefix, threads, strand_mode, source_label, count_introns=True):
+    """
+    Run featureCounts in the same order as the original workflow:
+    exon assignment first, then intron assignment on the exon-tagged BAM.
+
+    This preserves exon priority for reads that overlap both annotations, which
+    is not equivalent to a single combined exon+intron SAF with largestOverlap.
+    """
+    exon_bam = run_featurecounts_cmd(
+        featurecounts_exec,
+        input_bam,
+        exon_saf,
+        f"{out_prefix}.exon",
+        threads,
+        strand_mode,
+        f"{source_label}_Exon",
+    )
+    if not count_introns:
+        return exon_bam
+
+    intron_bam = run_featurecounts_cmd(
+        featurecounts_exec,
+        exon_bam,
+        intron_saf,
+        f"{out_prefix}.intron",
+        threads,
+        strand_mode,
+        f"{source_label}_Intron",
+    )
+    if os.path.exists(exon_bam):
+        os.remove(exon_bam)
+    return intron_bam
+
+def process_bam_and_calculate_stats(
+    input_bam,
+    out_bam,
+    samtools_exec,
+    threads=4,
+    gene_map=None,
+    source_label=None,
+    gene_models=None,
+    collect_coverage=True,
+    output_handle=None,
+):
     """
     Processes a single BAM from Combined SAF featureCounts.
     Parses XT tag to distinguish Exon (GeneID) vs Intron (GeneID__INTRON__).
@@ -412,12 +475,13 @@ def process_bam_and_calculate_stats(input_bam, out_bam, samtools_exec, threads=4
     Adds GN:Z:GeneName tag.
     Calculates Stats on the fly.
     """
-    print(f"Processing BAM {input_bam} -> {out_bam} (Source: {source_label}, Threads: {threads})...")
+    target_desc = "shared output handle" if output_handle is not None else out_bam
+    print(f"Processing BAM {input_bam} -> {target_desc} (Source: {source_label}, Threads: {threads})...")
     
     read_stats = collections.defaultdict(lambda: collections.defaultdict(int))
     cov_arr = [0] * 100
     cov_count = 0
-    MAX_COV_READS = 500000
+    MAX_COV_READS = 5000000
 
     def update_stats(read_obj, category, source_lbl):
         bc = None
@@ -452,7 +516,7 @@ def process_bam_and_calculate_stats(input_bam, out_bam, samtools_exec, threads=4
                      read_stats["__NO_CB__"]["Unused BC"] += 1
 
     def update_coverage(read_obj, gene_models, cov_arr):
-        if not gene_models: return False
+        if not collect_coverage or not gene_models: return False
         
         gene_id = None
         if isinstance(read_obj, str):
@@ -509,72 +573,88 @@ def process_bam_and_calculate_stats(input_bam, out_bam, samtools_exec, threads=4
                     cov_arr[pct_bins[i]] += 1
         return hit
 
+    def choose_assignment_from_xt(xt_values):
+        exon_gene = None
+        intron_gene = None
+        for xt_val in xt_values:
+            if not xt_val:
+                continue
+            if "__INTRON__" in xt_val:
+                if intron_gene is None:
+                    intron_gene = xt_val.split("__INTRON__")[0]
+            elif exon_gene is None:
+                exon_gene = xt_val
+        if exon_gene:
+            return exon_gene, "E", "Exon"
+        if intron_gene:
+            return intron_gene, "N", "Intron"
+        return None, None, None
+
     # Try pysam
     try:
         import pysam
         print("Using pysam for BAM processing...")
         
         # Input is likely name sorted from featureCounts
-        with pysam.AlignmentFile(input_bam, "rb", threads=int(threads)) as f_in, \
-             pysam.AlignmentFile(out_bam, "wb", template=f_in, threads=int(threads)) as f_out:
-            
-            count = 0
-            for read in f_in:
-                count += 1
-                if count % 1000000 == 0: print(f"Processed {count} reads...", end='\r')
-                
-                category = "Intergenic"
-                final_read = read
-                
-                if read.has_tag('XT'):
-                    xt_val = read.get_tag('XT')
+        with pysam.AlignmentFile(input_bam, "rb", threads=int(threads)) as f_in:
+            if output_handle is None:
+                f_out_ctx = pysam.AlignmentFile(out_bam, "wb", template=f_in, threads=int(threads))
+            else:
+                f_out_ctx = None
+            f_out = output_handle if output_handle is not None else f_out_ctx
+            try:
+                count = 0
+                for read in f_in:
+                    count += 1
+                    if count % 1000000 == 0: print(f"Processed {count} reads...", end='\r')
                     
-                    if "__INTRON__" in xt_val:
-                        # Intron Assignment
-                        real_gene = xt_val.split("__INTRON__")[0]
-                        final_read.set_tag('GX', real_gene)
-                        final_read.set_tag('RE', 'N') # Intron
-                        category = "Intron"
-                    else:
-                        # Exon Assignment
-                        final_read.set_tag('GX', xt_val)
-                        final_read.set_tag('RE', 'E') # Exon
-                        category = "Exon"
-                        
-                else:
-                    # Unassigned
-                    status = "Unassigned"
-                    if read.has_tag('XS'):
-                        xs_val = read.get_tag('XS')
-                        if "Unassigned_" in xs_val:
-                            status = xs_val.replace("Unassigned_", "")
-                        elif xs_val == "Assigned": 
-                             pass
+                    category = "Intergenic"
+                    final_read = read
                     
-                    if status == "NoFeatures":
-                         final_read.set_tag('RE', 'I')
-                         category = "Intergenic"
-                    elif read.is_unmapped:
-                         category = "Unmapped"
-                    else:
-                         category = status
+                    xt_values = [value for tag, value in read.get_tags() if tag == "XT"]
+                    gene_id, re_tag, assigned_category = choose_assignment_from_xt(xt_values)
+                    if gene_id:
+                        final_read.set_tag('GX', gene_id)
+                        final_read.set_tag('RE', re_tag)
+                        category = assigned_category
 
-                if source_label:
-                    final_read.set_tag('SR', source_label)
-                
-                if final_read.has_tag('GX'):
-                    g_id = final_read.get_tag('GX')
-                    if gene_map:
-                        g_name = gene_map.get(g_id, g_id)
-                        final_read.set_tag('GN', g_name)
-                
-                # Stats
-                update_stats(final_read, category, source_label)
-                if cov_count < MAX_COV_READS:
-                    if update_coverage(final_read, gene_models, cov_arr):
-                        cov_count += 1
-                
-                f_out.write(final_read)
+                    else:
+                        # Unassigned
+                        status = "Unassigned"
+                        if read.has_tag('XS'):
+                            xs_val = read.get_tag('XS')
+                            if "Unassigned_" in xs_val:
+                                status = xs_val.replace("Unassigned_", "")
+                            elif xs_val == "Assigned":
+                                 pass
+
+                        if status == "NoFeatures":
+                             final_read.set_tag('RE', 'I')
+                             category = "Intergenic"
+                        elif read.is_unmapped:
+                             category = "Unmapped"
+                        else:
+                             category = status
+
+                    if source_label:
+                        final_read.set_tag('SR', source_label)
+
+                    if final_read.has_tag('GX'):
+                        g_id = final_read.get_tag('GX')
+                        if gene_map:
+                            g_name = gene_map.get(g_id, g_id)
+                            final_read.set_tag('GN', g_name)
+
+                    # Stats
+                    update_stats(final_read, category, source_label)
+                    if collect_coverage and cov_count < MAX_COV_READS:
+                        if update_coverage(final_read, gene_models, cov_arr):
+                            cov_count += 1
+
+                    f_out.write(final_read)
+            finally:
+                if f_out_ctx is not None:
+                    f_out_ctx.close()
         
         print("\nProcessing complete (via pysam).")
         return read_stats, cov_arr
@@ -590,6 +670,9 @@ def process_bam_and_calculate_stats(input_bam, out_bam, samtools_exec, threads=4
     cmd_in = [samtools_exec, 'view', '-h', '-@', str(threads), input_bam]
     proc_in = subprocess.Popen(cmd_in, stdout=subprocess.PIPE, text=True, bufsize=buf_size)
     
+    if output_handle is not None:
+        raise RuntimeError("Shared BAM output handle requires pysam support.")
+
     cmd_out = [samtools_exec, 'view', '-b', '-@', str(threads), '-o', out_bam, '-']
     proc_out = subprocess.Popen(cmd_out, stdin=subprocess.PIPE, stderr=subprocess.PIPE, text=True, bufsize=buf_size)
     
@@ -606,22 +689,13 @@ def process_bam_and_calculate_stats(input_bam, out_bam, samtools_exec, threads=4
             final_line = None
             category = "Intergenic"
             
-            has_xt = 'XT:Z:' in line
+            fields = line.rstrip().split('\t')
+            xt_values = [field[5:] for field in fields[11:] if field.startswith('XT:Z:')]
+            gene_id, re_tag, assigned_category = choose_assignment_from_xt(xt_values)
             
-            if has_xt:
-                # Find XT value
-                xt_start = line.find('XT:Z:') + 5
-                xt_end = line.find('\t', xt_start)
-                if xt_end == -1: xt_val = line[xt_start:].strip()
-                else: xt_val = line[xt_start:xt_end]
-                
-                if "__INTRON__" in xt_val:
-                    real_gene = xt_val.split("__INTRON__")[0]
-                    final_line = line.rstrip().replace(f'XT:Z:{xt_val}', f'GX:Z:{real_gene}') + "\tRE:Z:N"
-                    category = "Intron"
-                else:
-                    final_line = line.rstrip().replace(f'XT:Z:{xt_val}', f'GX:Z:{xt_val}') + "\tRE:Z:E"
-                    category = "Exon"
+            if gene_id:
+                final_line = line.rstrip() + f"\tGX:Z:{gene_id}\tRE:Z:{re_tag}"
+                category = assigned_category
             else:
                 # Unassigned
                 reason = None
@@ -663,7 +737,7 @@ def process_bam_and_calculate_stats(input_bam, out_bam, samtools_exec, threads=4
 
             # Stats
             update_stats(final_line, category, source_label)
-            if cov_count < MAX_COV_READS:
+            if collect_coverage and cov_count < MAX_COV_READS:
                  if update_coverage(final_line, gene_models, cov_arr):
                      cov_count += 1
 
@@ -798,10 +872,12 @@ def main():
         
     saf_prefix = os.path.join(saf_dir, f"{project}")
     combined_saf, gene_map = parse_gtf_and_create_saf(gtf_file, saf_prefix, valid_chroms)
+    saf_paths = saf_paths_from_prefix(saf_prefix)
     
-    gene_models = load_gene_models(gtf_file)
+    collect_coverage = bool(config.get('make_stats', True))
+    gene_models = load_gene_models(gtf_file) if collect_coverage else {}
     
-    bams_to_merge = []
+    fc_outputs = []
     total_read_stats = collections.defaultdict(lambda: collections.defaultdict(int))
     total_cov_umi = [0] * 100
     total_cov_int = [0] * 100
@@ -814,40 +890,95 @@ def main():
     def merge_coverage(dest_cov, src_cov):
         for i in range(100):
             dest_cov[i] += src_cov[i]
-    
+
+    count_introns = bool(counting_opts.get("introns", True))
+
     # Process Internal (Strand 0)
     if os.path.exists(internal_bam):
         print("Running featureCounts for Internal Reads...")
         fc_prefix_int = internal_bam + ".fc"
-        fc_out_int = run_featurecounts_cmd(featurecounts_exec, internal_bam, combined_saf, fc_prefix_int, num_threads, 0, "Combined_Internal")
-        
-        processed_int = internal_bam + ".processed.bam"
-        r_stats, cov = process_bam_and_calculate_stats(
-            fc_out_int, processed_int, samtools_exec, num_threads, 
-            gene_map, source_label="Internal", gene_models=gene_models
+        fc_out_int = run_featurecounts_r_order(
+            featurecounts_exec,
+            internal_bam,
+            saf_paths["exon"],
+            saf_paths["intron"],
+            fc_prefix_int,
+            num_threads,
+            0,
+            "Internal",
+            count_introns=count_introns,
         )
-        
-        merge_stats(total_read_stats, r_stats)
-        merge_coverage(total_cov_int, cov)
-        os.remove(fc_out_int)
-        bams_to_merge.append(processed_int)
+        fc_outputs.append(("Internal", fc_out_int))
 
     # Process UMI (Strand 1)
     if os.path.exists(umi_bam):
         print("Running featureCounts for UMI Reads...")
         fc_prefix_umi = umi_bam + ".fc"
-        fc_out_umi = run_featurecounts_cmd(featurecounts_exec, umi_bam, combined_saf, fc_prefix_umi, num_threads, 1, "Combined_UMI")
-        
-        processed_umi = umi_bam + ".processed.bam"
-        r_stats, cov = process_bam_and_calculate_stats(
-            fc_out_umi, processed_umi, samtools_exec, num_threads,
-            gene_map, source_label="UMI", gene_models=gene_models
+        fc_out_umi = run_featurecounts_r_order(
+            featurecounts_exec,
+            umi_bam,
+            saf_paths["exon"],
+            saf_paths["intron"],
+            fc_prefix_umi,
+            num_threads,
+            1,
+            "UMI",
+            count_introns=count_introns,
         )
-        
-        merge_stats(total_read_stats, r_stats)
-        merge_coverage(total_cov_umi, cov)
-        os.remove(fc_out_umi)
-        bams_to_merge.append(processed_umi)
+        fc_outputs.append(("UMI", fc_out_umi))
+
+    if not fc_outputs:
+        print("Error: No BAMs processed.")
+        sys.exit(1)
+
+    try:
+        import pysam
+    except ImportError:
+        pysam = None
+
+    if pysam is not None:
+        print(f"Writing final GeneTagged BAM directly: {final_bam}")
+        with pysam.AlignmentFile(fc_outputs[0][1], "rb", threads=int(num_threads)) as template_in:
+            with pysam.AlignmentFile(final_bam, "wb", template=template_in, threads=int(num_threads)) as final_out:
+                for source_label, fc_bam in fc_outputs:
+                    r_stats, cov = process_bam_and_calculate_stats(
+                        fc_bam, final_bam, samtools_exec, num_threads,
+                        gene_map, source_label=source_label, gene_models=gene_models,
+                        collect_coverage=collect_coverage, output_handle=final_out,
+                    )
+                    merge_stats(total_read_stats, r_stats)
+                    if source_label == "UMI":
+                        merge_coverage(total_cov_umi, cov)
+                    else:
+                        merge_coverage(total_cov_int, cov)
+                    os.remove(fc_bam)
+    else:
+        print("pysam unavailable for direct final BAM writing; falling back to intermediate BAM merge.")
+        bams_to_merge = []
+        for source_label, fc_bam in fc_outputs:
+            processed_bam = fc_bam + ".processed.bam"
+            r_stats, cov = process_bam_and_calculate_stats(
+                fc_bam, processed_bam, samtools_exec, num_threads,
+                gene_map, source_label=source_label, gene_models=gene_models,
+                collect_coverage=collect_coverage,
+            )
+            merge_stats(total_read_stats, r_stats)
+            if source_label == "UMI":
+                merge_coverage(total_cov_umi, cov)
+            else:
+                merge_coverage(total_cov_int, cov)
+            os.remove(fc_bam)
+            bams_to_merge.append(processed_bam)
+
+        if len(bams_to_merge) == 1:
+            os.rename(bams_to_merge[0], final_bam)
+        else:
+            print(f"Merging BAMs with {num_threads} threads...")
+            cmd = [samtools_exec, 'cat', '-@', str(num_threads), '-o', final_bam] + bams_to_merge
+            subprocess.check_call(cmd)
+            for b in bams_to_merge:
+                if os.path.exists(b):
+                    os.remove(b)
 
     # Save Stats
     stats_out = os.path.join(stats_dir(out_dir), f"{project}.read_stats.json")
@@ -861,19 +992,6 @@ def main():
     }
     with open(stats_out, 'w') as f:
         json.dump(stats_data, f)
-
-    # Final Merge
-    if len(bams_to_merge) == 1:
-        os.rename(bams_to_merge[0], final_bam)
-    elif len(bams_to_merge) > 1:
-        print(f"Merging BAMs with {num_threads} threads...")
-        cmd = [samtools_exec, 'cat', '-@', str(num_threads), '-o', final_bam] + bams_to_merge
-        subprocess.check_call(cmd)
-        for b in bams_to_merge:
-            if os.path.exists(b): os.remove(b)
-    else:
-        print("Error: No BAMs processed.")
-        sys.exit(1)
 
     print("FeatureCounts pipeline finished successfully.")
 
