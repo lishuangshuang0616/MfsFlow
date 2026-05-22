@@ -6,7 +6,7 @@ from pathlib import Path
 from string import Template
 import re
 
-from path_layout import expression_dir, outputs_dir, stats_dir
+from path_layout import config_dir, expression_dir, outputs_dir, stats_dir
 
 # Hardcoded version since src/__init__.py might not exist
 __version__ = "1.0.0"
@@ -20,6 +20,8 @@ _JS_TEMPLATE_PLACEHOLDERS = {
     "exp",
     "cluster",
     "emptyMessage",
+    "plate",
+    "titleMetric",
 }
 
 _JSON_ARRAY_PLACEHOLDERS = {
@@ -44,11 +46,15 @@ _JSON_ARRAY_PLACEHOLDERS = {
     "rna_rankplot_data",
     "rna_stats_table_data",
     "rna_marker_data",
+    "barcode_mode_cards_data",
+    "manual_barcode_table_data",
+    "auto_plate_summary_data",
 }
 
 _JSON_OBJECT_PLACEHOLDERS = {
     "rna_read_distribution_bar_data",
     "rna_read_distribution_box_data",
+    "barcode_report_summary_data",
 }
 
 _CANONICAL_STATS_KEYS = {
@@ -107,6 +113,211 @@ def _normalize_stats_record(record):
             if canon not in out or out.get(canon) in (None, ""):
                 out[canon] = v
     return out
+
+
+def _to_float(value):
+    if value is None:
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    s = str(value).strip()
+    if not s:
+        return None
+    try:
+        return float(s.replace(",", ""))
+    except Exception:
+        return None
+
+
+def _fmt_int(value):
+    n = _to_float(value)
+    if n is None:
+        return ""
+    return f"{int(round(n)):,}"
+
+
+def _fmt_pct(value):
+    n = _to_float(value)
+    if n is None:
+        return ""
+    return f"{n * 100.0:.1f}%"
+
+
+def _median(values):
+    vals = [float(v) for v in values if v is not None]
+    if not vals:
+        return None
+    return statistics.median(vals)
+
+
+def _load_expected_barcode_rows(sample_outdir):
+    path = Path(config_dir(str(sample_outdir))) / "expect_id_barcode.tsv"
+    if not path.exists():
+        return []
+    rows = []
+    try:
+        with open(path, "r", encoding="utf-8", errors="ignore", newline="") as f:
+            reader = csv.DictReader(f, delimiter="\t")
+            for row in reader:
+                if not row:
+                    continue
+                rows.append({
+                    "wellID": str(row.get("wellID", "")).strip(),
+                    "umi_barcodes": str(row.get("umi_barcodes", "")).strip(),
+                    "internal_barcodes": str(row.get("internal_barcodes", "")).strip(),
+                })
+    except Exception:
+        return []
+    return rows
+
+
+def _well_plate_id(well_id):
+    m = re.match(r"^P(\d+)[A-P]\d+$", str(well_id or "").strip())
+    return m.group(1) if m else ""
+
+
+def _process_barcode_report_data(sample_outdir, combined_context, config):
+    records = []
+    try:
+        records = json.loads(combined_context.get("rna_stats_table_data", "[]") or "[]")
+    except Exception:
+        records = []
+    if not isinstance(records, list):
+        records = []
+
+    sample_type = str((config.get("sample") or {}).get("sample_type") or "").strip().lower()
+    barcode_source = str(config.get("barcode_source") or "").strip()
+    expected_rows = _load_expected_barcode_rows(sample_outdir)
+    expected_by_well = {row["wellID"]: row for row in expected_rows if row.get("wellID")}
+
+    total_reads = []
+    umi_reads = []
+    internal_reads = []
+    genes = []
+    umis = []
+    mapping_ratios = []
+    active = 0
+    plate_ids = set()
+    manual_rows = []
+    plate_summary = {}
+
+    for raw in records:
+        row = _normalize_stats_record(raw)
+        well = str(row.get("wellID") or "").strip()
+        if not well:
+            continue
+
+        internal = _to_float(row.get("internal_reads")) or 0.0
+        umi = _to_float(row.get("umi_reads")) or 0.0
+        all_reads = _to_float(row.get("all_reads"))
+        if all_reads is None:
+            all_reads = internal + umi
+        if all_reads > 0:
+            active += 1
+        total_reads.append(all_reads)
+        internal_reads.append(internal)
+        umi_reads.append(umi)
+
+        gene_val = _to_float(row.get("Intron_Exon_genes"))
+        if gene_val is None:
+            gene_val = _to_float(row.get("Exon_genes"))
+        genes.append(gene_val)
+        umi_val = _to_float(row.get("Intron_Exon_umis"))
+        if umi_val is None:
+            umi_val = _to_float(row.get("Exon_umis"))
+        umis.append(umi_val)
+
+        mapping = _to_float(row.get("MappingRatio"))
+        if mapping is None:
+            exon_r = _to_float(row.get("Exon_reads")) or 0.0
+            intron_r = _to_float(row.get("intron_reads")) or _to_float(row.get("Intron_reads")) or 0.0
+            intergenic_r = _to_float(row.get("Intergenic_reads")) or 0.0
+            ambiguity_r = _to_float(row.get("Ambiguity_reads")) or 0.0
+            unmapped_r = _to_float(row.get("Unmapped_reads")) or 0.0
+            denom = exon_r + intron_r + intergenic_r + ambiguity_r + unmapped_r
+            mapping = ((exon_r + intron_r + intergenic_r + ambiguity_r) / denom) if denom > 0 else None
+        mapping_ratios.append(mapping)
+
+        plate = _well_plate_id(well)
+        if plate:
+            plate_ids.add(plate)
+            bucket = plate_summary.setdefault(plate, {"plate": plate, "expected_wells": 0, "active_wells": 0, "reads": [], "genes": [], "umis": []})
+            bucket["active_wells"] += 1 if all_reads > 0 else 0
+            bucket["reads"].append(all_reads)
+            bucket["genes"].append(gene_val)
+            bucket["umis"].append(umi_val)
+
+        expected = expected_by_well.get(well, {})
+        manual_rows.append({
+            "wellID": well,
+            "internal_barcodes": expected.get("internal_barcodes") or row.get("internal_barcodes") or "",
+            "umi_barcodes": expected.get("umi_barcodes") or row.get("umi_barcodes") or "",
+            "all_reads": int(all_reads),
+            "umi_reads": int(umi),
+            "internal_reads": int(internal),
+            "genes": int(gene_val) if gene_val is not None else "",
+            "umis": int(umi_val) if umi_val is not None else "",
+            "mapping_ratio": mapping,
+        })
+
+    if expected_rows:
+        for row in expected_rows:
+            plate = _well_plate_id(row.get("wellID"))
+            if plate:
+                plate_ids.add(plate)
+                bucket = plate_summary.setdefault(plate, {"plate": plate, "expected_wells": 0, "active_wells": 0, "reads": [], "genes": [], "umis": []})
+                bucket["expected_wells"] += 1
+    else:
+        for plate in plate_summary:
+            plate_summary[plate]["expected_wells"] = len([r for r in records if _well_plate_id((r or {}).get("wellID")) == plate])
+
+    total_read_sum = sum(total_reads)
+    umi_read_sum = sum(umi_reads)
+    expected_count = len(expected_rows) if expected_rows else len(records)
+    summary = {
+        "sample_type": sample_type or "unknown",
+        "sample_type_label": {"auto": "Auto 384-well plate", "manual": "Manual samples", "custom": "Custom barcode set"}.get(sample_type, sample_type or "Unknown"),
+        "barcode_source": barcode_source,
+        "expected_wells": expected_count,
+        "active_wells": active,
+        "active_fraction": (active / expected_count) if expected_count else None,
+        "plate_count": len(plate_ids),
+        "total_reads": total_read_sum,
+        "median_reads": _median(total_reads),
+        "median_genes": _median(genes),
+        "median_umis": _median(umis),
+        "median_mapping_ratio": _median(mapping_ratios),
+        "umi_fraction": (umi_read_sum / total_read_sum) if total_read_sum > 0 else None,
+    }
+
+    cards = [
+        {"label": "Barcode mode", "value": summary["sample_type_label"]},
+        {"label": "Expected wells", "value": _fmt_int(summary["expected_wells"])},
+        {"label": "Active wells", "value": _fmt_int(summary["active_wells"])},
+        {"label": "Median reads", "value": _fmt_int(summary["median_reads"])},
+        {"label": "Median genes", "value": _fmt_int(summary["median_genes"])},
+        {"label": "Median mapping", "value": _fmt_pct(summary["median_mapping_ratio"])},
+    ]
+
+    plate_rows = []
+    for plate in sorted(plate_summary, key=lambda x: int(x) if str(x).isdigit() else str(x)):
+        item = plate_summary[plate]
+        expected = item["expected_wells"] or len(item["reads"])
+        plate_rows.append({
+            "plate": plate,
+            "expected_wells": expected,
+            "active_wells": item["active_wells"],
+            "active_fraction": (item["active_wells"] / expected) if expected else None,
+            "median_reads": _median(item["reads"]),
+            "median_genes": _median(item["genes"]),
+            "median_umis": _median(item["umis"]),
+        })
+
+    manual_rows.sort(key=lambda x: str(x.get("wellID", "")))
+    combined_context["barcode_report_summary_data"] = json.dumps(summary)
+    combined_context["barcode_mode_cards_data"] = json.dumps(cards)
+    combined_context["manual_barcode_table_data"] = json.dumps(manual_rows)
+    combined_context["auto_plate_summary_data"] = json.dumps(plate_rows)
 
 
 def _count_lines_in_tsv_gz(path):
@@ -370,6 +581,7 @@ def _process_rna_data(omics_data, sample_outdir, combined_context):
         
     # Process RNA-specific data
     _process_rna_stats_table_data(sample_outdir, combined_context)
+    _process_barcode_report_data(sample_outdir, combined_context, combined_context.get("_run_config", {}))
     _process_rna_saturation_data(sample_outdir, combined_context)
     _process_rna_gene_body_coverage_data(sample_outdir, combined_context)
     _process_rna_read_distribution_data(sample_outdir, combined_context)
@@ -570,9 +782,9 @@ def _process_rna_saturation_data(sample_outdir, combined_context):
 
 def generate_multi_report(name, outdir, config):
     """
-    Generates a multi-omics report.
+    Generates the HTML analysis report.
     """
-    print(f"Generating multi-omics report for sample {name} in {outdir}")
+    print(f"Generating HTML report for sample {name} in {outdir}")
     
     sample_outdir = Path(outdir)
     
@@ -581,9 +793,16 @@ def generate_multi_report(name, outdir, config):
     
     omics_data = get_omics_data(outdir, name, config)
     
-    # Locate template
-    # Assuming report.py is in src/, and template is in report/
-    template_path = Path(__file__).parent.parent / 'report' / 'template_multi.html'
+    sample_type = str((config.get("sample") or {}).get("sample_type") or "").strip().lower()
+
+    # Locate template. Auto and manual reports use separate templates because
+    # 384-well plate QC and low-sample manual summaries have different layouts.
+    template_dir = Path(__file__).parent.parent / 'report'
+    template_by_type = {
+        "auto": template_dir / "template_auto.html",
+        "manual": template_dir / "template_manual.html",
+    }
+    template_path = template_by_type.get(sample_type, template_dir / 'template_multi.html')
     
     if not template_path.exists():
         print(f"Error: Template not found at {template_path}")
@@ -600,7 +819,8 @@ def generate_multi_report(name, outdir, config):
     # Add sample name and version
     combined_context['samplename'] = name
     combined_context['version'] = __version__
-    combined_context["sample_type"] = str((config.get("sample") or {}).get("sample_type") or "").strip().lower()
+    combined_context["sample_type"] = sample_type
+    combined_context["_run_config"] = config
     combined_context["vdj_t_target_enabled"] = "false"
     combined_context["vdj_b_target_enabled"] = "false"
     combined_context["fastq_display_html"] = ""
@@ -612,7 +832,6 @@ def generate_multi_report(name, outdir, config):
     combined_context['config_parameters'] = json.dumps(config_for_display, indent=4, default=str)
 
     # Handle Plotly JS loading
-    template_dir = template_path.parent
     plotly_candidates = [
         template_dir / 'plotly.js',
         template_dir / 'plotly-2.26.0.min.js',
@@ -645,11 +864,20 @@ def generate_multi_report(name, outdir, config):
     try:
         report_html = template.safe_substitute(combined_context)
         
-        out_file = outs_dir / f'{name}_multi_report.html'
+        sample_type = combined_context.get("sample_type") or "analysis"
+        if sample_type == "auto":
+            report_suffix = "auto_plate_report"
+        elif sample_type == "manual":
+            report_suffix = "manual_report"
+        elif sample_type == "custom":
+            report_suffix = "custom_barcode_report"
+        else:
+            report_suffix = "analysis_report"
+        out_file = outs_dir / f'{name}_{report_suffix}.html'
         with open(out_file, 'w', encoding='utf-8') as f:
             f.write(report_html)
         
-        print(f"Multi-omics report saved to: {out_file}")
-        print("Multi-omics report generation complete.")
+        print(f"HTML report saved to: {out_file}")
+        print("HTML report generation complete.")
     except Exception as e:
         print(f"Error substituting template: {e}")

@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>${samplename} Manual Sample Report</title>
+${plotly_loader_tag}
+<style>
+    :root {
+        --bg: #f7f8fb;
+        --panel: #ffffff;
+        --text: #172033;
+        --muted: #64748b;
+        --line: #e2e8f0;
+        --green: #1f9d66;
+        --blue: #2563eb;
+        --orange: #ea7a20;
+        --red: #dc2626;
+    }
+    * { box-sizing: border-box; }
+    body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font-family: Inter, -apple-system, BlinkMacSystemFont, "PingFang SC", "Segoe UI", Arial, sans-serif;
+        font-size: 13px;
+    }
+    .shell { max-width: 1080px; margin: 0 auto; padding: 18px; }
+    .hero {
+        background: linear-gradient(135deg, #1e3a8a, #2563eb);
+        color: #fff;
+        border-radius: 8px;
+        padding: 20px 24px;
+        display: flex;
+        justify-content: space-between;
+        gap: 18px;
+        align-items: flex-end;
+    }
+    .hero h1 { margin: 0; font-size: 23px; line-height: 1.2; }
+    .hero .sub { margin-top: 8px; opacity: .9; }
+    .badge { border: 1px solid rgba(255,255,255,.35); padding: 6px 10px; border-radius: 6px; white-space: nowrap; }
+    .grid { display: grid; gap: 14px; }
+    .cards { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); margin-top: 14px; }
+    .two { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+    .panel {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 16px;
+        margin-top: 14px;
+        box-shadow: 0 1px 2px rgba(15, 23, 42, .04);
+    }
+    .card {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 14px;
+    }
+    .card-value { font-size: 21px; font-weight: 700; overflow-wrap: anywhere; }
+    .card-label { color: var(--muted); margin-top: 5px; font-size: 12px; }
+    h2 { font-size: 17px; margin: 0 0 12px; }
+    h3 { font-size: 14px; margin: 0 0 10px; color: #263244; }
+    .muted { color: var(--muted); }
+    .toolbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
+    select, input {
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        padding: 6px 9px;
+        background: #fff;
+        color: var(--text);
+    }
+    table { width: 100%; border-collapse: collapse; background: #fff; }
+    th, td { border: 1px solid var(--line); padding: 6px 8px; white-space: nowrap; }
+    th { background: #f1f5f9; text-align: left; font-weight: 700; }
+    td.numeric { text-align: right; font-weight: 600; }
+    .table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; }
+    .table-wrap table { border: 0; }
+    .plot { width: 100%; height: 280px; min-height: 240px; }
+    .compact-plot { height: 240px; min-height: 220px; margin-top: 12px; }
+    .wide-plot { height: 360px; min-height: 320px; }
+    .empty { color: var(--muted); display: flex; align-items: center; justify-content: center; min-height: 120px; }
+    details { margin-top: 16px; }
+    summary { cursor: pointer; color: var(--muted); font-weight: 600; }
+    pre { overflow-x: auto; background: #0f172a; color: #e2e8f0; padding: 14px; border-radius: 8px; font-size: 12px; }
+    footer { color: var(--muted); text-align: center; padding: 20px 0 8px; }
+    @media (max-width: 900px) {
+        .shell { padding: 12px; }
+        .hero { display: block; }
+        .badge { display: inline-block; margin-top: 12px; }
+        .two { grid-template-columns: 1fr; }
+    }
+</style>
+</head>
+<body>
+<main class="shell">
+    <section class="hero">
+        <div>
+            <h1>${samplename}</h1>
+            <div class="sub">Manual barcode RNA sample report</div>
+        </div>
+        <div class="badge">MhsFlow v${version}</div>
+    </section>
+
+    <section class="grid cards" id="summary-cards"></section>
+
+    <section class="panel">
+        <h2>Manual Sample Comparison</h2>
+        <div id="sample-comparison" class="plot wide-plot"></div>
+    </section>
+
+    <section class="panel">
+        <h2>UMI-Based vs Read-Based Statistics</h2>
+        <div class="grid two">
+            <div>
+                <h3>UMI-based</h3>
+                <div class="table-wrap">
+                    <table>
+                        <tbody id="umi-summary-body"></tbody>
+                    </table>
+                </div>
+            </div>
+            <div>
+                <h3>Read-based</h3>
+                <div class="table-wrap">
+                    <table>
+                        <tbody id="read-summary-body"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        <div id="umi-read-comparison" class="plot compact-plot"></div>
+    </section>
+
+    <section class="panel">
+        <h2>Manual Sample Details</h2>
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Sample</th>
+                        <th>All reads</th>
+                        <th>UMI reads</th>
+                        <th>Internal reads</th>
+                        <th>Genes</th>
+                        <th>UMIs</th>
+                        <th>Mapping ratio</th>
+                        <th>UMI barcode</th>
+                        <th>Internal barcode</th>
+                    </tr>
+                </thead>
+                <tbody id="manual-detail-body"></tbody>
+            </table>
+        </div>
+    </section>
+
+    <section class="grid two">
+        <div class="panel">
+            <h2>Read Distribution</h2>
+            <div id="read-distribution" class="plot"></div>
+        </div>
+        <div class="panel">
+            <h2>Sample Metric Distribution</h2>
+            <div class="toolbar">
+                <label>Metric
+                    <select id="metric-select">
+                        <option value="all_reads">All reads</option>
+                        <option value="genes">Genes</option>
+                        <option value="umis">UMIs</option>
+                        <option value="mapping_ratio">Mapping ratio</option>
+                    </select>
+                </label>
+            </div>
+            <div id="metric-barplot" class="plot"></div>
+        </div>
+    </section>
+
+    <section class="grid two">
+        <div class="panel">
+            <h2>Saturation</h2>
+            <div id="saturation-plot" class="plot"></div>
+        </div>
+        <div class="panel">
+            <h2>Gene Body Coverage</h2>
+            <div id="gene-body-plot" class="plot"></div>
+        </div>
+    </section>
+
+    <section class="panel">
+        <h2>Full Statistics Table</h2>
+        <div class="toolbar">
+            <input id="stats-search" placeholder="Search sample..."/>
+            <span class="muted" id="stats-count"></span>
+        </div>
+        <div class="table-wrap">
+            <table id="stats-table"></table>
+        </div>
+    </section>
+
+    <section class="panel">
+        <h2>Run Information</h2>
+        <div class="grid cards">
+            <div class="card"><div class="card-value">${rna_species}</div><div class="card-label">Transcriptome</div></div>
+            <div class="card"><div class="card-value">${rna_total_gene}</div><div class="card-label">Genes in matrix</div></div>
+            <div class="card"><div class="card-value">${rna_saturation}</div><div class="card-label">Final saturation</div></div>
+        </div>
+        <details>
+            <summary>Configuration</summary>
+            <pre>${config_parameters}</pre>
+        </details>
+    </section>
+
+    <footer>Generated by MhsFlow</footer>
+</main>
+
+<script>
+(function() {
+    const stats = parseJson('${rna_stats_table_data}', []);
+    const cards = parseJson('${barcode_mode_cards_data}', []);
+    const manualRows = parseJson('${manual_barcode_table_data}', []);
+    const readDist = parseJson('${rna_read_distribution_bar_data}', {});
+    const satX = parseJson('${rna_saturation_fraction}', []);
+    const satLib = parseJson('${rna_saturation_lib_pct}', []);
+    const satGene = parseJson('${rna_saturation_gene_pct}', []);
+    const medUmi = parseJson('${rna_saturation_median_genes_umi}', []);
+    const geneBodyX = parseJson('${rna_gene_body_percentile}', []);
+    const geneBodyUmi = parseJson('${rna_gene_body_umi_maxnorm}', []);
+    const geneBodyInt = parseJson('${rna_gene_body_internal_maxnorm}', []);
+
+    function parseJson(raw, fallback) {
+        try {
+            const s = String(raw || '').trim();
+            if (!s) return fallback;
+            return JSON.parse(s);
+        } catch (e) {
+            return fallback;
+        }
+    }
+    function el(id) { return document.getElementById(id); }
+    function num(v) {
+        if (v === null || v === undefined || v === '') return null;
+        const n = Number(String(v).replace(/,/g, ''));
+        return Number.isFinite(n) ? n : null;
+    }
+    function fmtInt(v) {
+        const n = num(v);
+        return n === null ? '' : Math.round(n).toLocaleString();
+    }
+    function fmtPct(v) {
+        const n = num(v);
+        return n === null ? '' : (n * 100).toFixed(1) + '%';
+    }
+    function renderCards() {
+        const target = el('summary-cards');
+        target.innerHTML = '';
+        cards.forEach(function(card) {
+            const div = document.createElement('div');
+            div.className = 'card';
+            div.innerHTML = '<div class="card-value"></div><div class="card-label"></div>';
+            div.children[0].textContent = card.value || '';
+            div.children[1].textContent = card.label || '';
+            target.appendChild(div);
+        });
+    }
+    function renderManualDetails() {
+        const body = el('manual-detail-body');
+        body.innerHTML = '';
+        manualRows.forEach(function(row) {
+            const tr = document.createElement('tr');
+            const vals = [
+                row.wellID,
+                fmtInt(row.all_reads),
+                fmtInt(row.umi_reads),
+                fmtInt(row.internal_reads),
+                fmtInt(row.genes),
+                fmtInt(row.umis),
+                fmtPct(row.mapping_ratio),
+                row.umi_barcodes || '',
+                row.internal_barcodes || ''
+            ];
+            vals.forEach(function(v, i) {
+                const td = document.createElement('td');
+                if (i > 0 && i < 7) td.className = 'numeric';
+                td.textContent = v;
+                tr.appendChild(td);
+            });
+            body.appendChild(tr);
+        });
+        if (!manualRows.length) body.innerHTML = '<tr><td colspan="9">No manual sample summary available.</td></tr>';
+    }
+    function renderSampleComparison() {
+        const plot = el('sample-comparison');
+        if (!window.Plotly || !manualRows.length) { plot.innerHTML = '<div class="empty">No manual sample data</div>'; return; }
+        const labels = manualRows.map(function(r) { return String(r.wellID || ''); });
+        const traces = [
+            { type: 'bar', x: labels, y: manualRows.map(function(r) { return num(r.all_reads) || 0; }), name: 'All reads', marker: { color: '#2563eb' }, yaxis: 'y' },
+            { type: 'bar', x: labels, y: manualRows.map(function(r) { return num(r.umi_reads) || 0; }), name: 'UMI reads', marker: { color: '#1f9d66' }, yaxis: 'y' },
+            { type: 'scatter', mode: 'lines+markers', x: labels, y: manualRows.map(function(r) { return num(r.genes) || 0; }), name: 'Genes', line: { color: '#ea7a20' }, yaxis: 'y2' }
+        ];
+        Plotly.newPlot(plot, traces, {
+            barmode: 'group',
+            height: 360,
+            margin: { l: 52, r: 56, t: 12, b: labels.length > 8 ? 78 : 52 },
+            xaxis: { title: 'Manual sample', tickangle: labels.length > 8 ? -45 : 0 },
+            yaxis: { title: 'Reads', rangemode: 'tozero' },
+            yaxis2: { title: 'Genes', overlaying: 'y', side: 'right', rangemode: 'tozero' },
+            legend: { orientation: 'h', x: .5, y: -0.2, xanchor: 'center' },
+            plot_bgcolor: 'rgba(0,0,0,0)',
+            paper_bgcolor: 'rgba(0,0,0,0)'
+        }, { responsive: true, displayModeBar: false });
+    }
+    function renderReadDistribution() {
+        const plot = el('read-distribution');
+        if (!window.Plotly || !readDist.values) { plot.innerHTML = '<div class="empty">No read distribution data</div>'; return; }
+        const order = readDist.order || [];
+        const values = order.map(function(k) { return Number(readDist.values[k]) || 0; });
+        const colors = order.map(function(k) { return (readDist.colors || {})[k] || '#94a3b8'; });
+        Plotly.newPlot(plot, [{ type: 'bar', x: order, y: values, marker: { color: colors } }], {
+            height: 280,
+            margin: { l: 44, r: 12, t: 12, b: 58 },
+            yaxis: { title: '% reads', range: [0, Math.max(100, Math.max.apply(null, values) * 1.15)] },
+            plot_bgcolor: 'rgba(0,0,0,0)',
+            paper_bgcolor: 'rgba(0,0,0,0)'
+        }, { responsive: true, displayModeBar: false });
+    }
+    function renderMetricBarplot() {
+        const plot = el('metric-barplot');
+        if (!window.Plotly) return;
+        function draw() {
+            const metric = el('metric-select').value;
+            const labels = manualRows.map(function(r) { return String(r.wellID || ''); });
+            const vals = manualRows.map(function(r) { return num(r[metric]) || 0; });
+            if (!labels.length) { plot.innerHTML = '<div class="empty">No data</div>'; return; }
+            Plotly.react(plot, [{ type: 'bar', x: labels, y: vals, marker: { color: '#2563eb' } }], {
+                height: 280,
+                margin: { l: 48, r: 12, t: 12, b: labels.length > 8 ? 78 : 50 },
+                xaxis: { title: 'Manual sample', tickangle: labels.length > 8 ? -45 : 0 },
+                yaxis: { title: metric },
+                plot_bgcolor: 'rgba(0,0,0,0)',
+                paper_bgcolor: 'rgba(0,0,0,0)'
+            }, { responsive: true, displayModeBar: false });
+        }
+        el('metric-select').addEventListener('change', draw);
+        draw();
+    }
+    function median(values) {
+        const vals = values.filter(function(v) { return v !== null && Number.isFinite(v); }).sort(function(a, b) { return a - b; });
+        if (!vals.length) return null;
+        const mid = Math.floor(vals.length / 2);
+        return vals.length % 2 ? vals[mid] : (vals[mid - 1] + vals[mid]) / 2;
+    }
+    function summarizeMetric(keys) {
+        const vals = stats.map(function(row) {
+            for (let i = 0; i < keys.length; i++) {
+                const v = num(row[keys[i]]);
+                if (v !== null) return v;
+            }
+            return null;
+        }).filter(function(v) { return v !== null; });
+        const total = vals.reduce(function(a, b) { return a + b; }, 0);
+        return { total: total, median: median(vals) };
+    }
+    function renderUmiReadComparison() {
+        const labels = stats.map(function(row) { return row.wellID || ''; });
+        const umiGenes = stats.map(function(row) { return num(row.Intron_Exon_genes) ?? num(row.Exon_genes) ?? 0; });
+        const readGenes = stats.map(function(row) { return num(row.Intron_Exon_read_genes) ?? num(row.Exon_read_genes) ?? 0; });
+        const umiCounts = stats.map(function(row) { return num(row.Intron_Exon_umis) ?? num(row.Exon_umis) ?? 0; });
+        const readCounts = stats.map(function(row) { return num(row.all_reads) || 0; });
+        const umiSummary = {
+            genes: summarizeMetric(['Intron_Exon_genes', 'Exon_genes']),
+            molecules: summarizeMetric(['Intron_Exon_umis', 'Exon_umis']),
+            exon: summarizeMetric(['Exon_umis']),
+            intron: summarizeMetric(['Intron_umis'])
+        };
+        const readSummary = {
+            genes: summarizeMetric(['Intron_Exon_read_genes', 'Exon_read_genes']),
+            reads: summarizeMetric(['all_reads']),
+            exon: summarizeMetric(['Exon_reads']),
+            intron: summarizeMetric(['intron_reads', 'Intron_reads'])
+        };
+        el('umi-summary-body').innerHTML = [
+            ['Median genes/sample', fmtInt(umiSummary.genes.median)],
+            ['Median UMIs/sample', fmtInt(umiSummary.molecules.median)],
+            ['Total UMIs', fmtInt(umiSummary.molecules.total)],
+            ['Exon UMIs', fmtInt(umiSummary.exon.total)],
+            ['Intron UMIs', fmtInt(umiSummary.intron.total)]
+        ].map(function(r) { return '<tr><th>' + r[0] + '</th><td class="numeric">' + r[1] + '</td></tr>'; }).join('');
+        el('read-summary-body').innerHTML = [
+            ['Median read genes/sample', fmtInt(readSummary.genes.median)],
+            ['Median reads/sample', fmtInt(readSummary.reads.median)],
+            ['Total reads', fmtInt(readSummary.reads.total)],
+            ['Exon reads', fmtInt(readSummary.exon.total)],
+            ['Intron reads', fmtInt(readSummary.intron.total)]
+        ].map(function(r) { return '<tr><th>' + r[0] + '</th><td class="numeric">' + r[1] + '</td></tr>'; }).join('');
+
+        const plot = el('umi-read-comparison');
+        if (!window.Plotly || !labels.length) { plot.innerHTML = '<div class="empty">No UMI/read comparison data</div>'; return; }
+        Plotly.newPlot(plot, [
+            { type: 'bar', name: 'UMI-based genes', x: labels, y: umiGenes, marker: { color: '#1f9d66' }, yaxis: 'y' },
+            { type: 'bar', name: 'Read-based genes', x: labels, y: readGenes, marker: { color: '#2563eb' }, yaxis: 'y' },
+            { type: 'scatter', mode: 'lines+markers', name: 'UMIs', x: labels, y: umiCounts, line: { color: '#dc2626' }, yaxis: 'y2' },
+            { type: 'scatter', mode: 'lines+markers', name: 'Reads', x: labels, y: readCounts, line: { color: '#ea7a20', dash: 'dash' }, yaxis: 'y2' }
+        ], {
+            barmode: 'group',
+            height: 240,
+            margin: { l: 52, r: 58, t: 12, b: labels.length > 8 ? 78 : 52 },
+            xaxis: { title: 'Manual sample', tickangle: labels.length > 8 ? -45 : 0 },
+            yaxis: { title: 'Genes' },
+            yaxis2: { title: 'Molecules / reads', overlaying: 'y', side: 'right', rangemode: 'tozero' },
+            legend: { orientation: 'h', x: .5, y: -0.25, xanchor: 'center' },
+            plot_bgcolor: 'rgba(0,0,0,0)',
+            paper_bgcolor: 'rgba(0,0,0,0)'
+        }, { responsive: true, displayModeBar: false });
+    }
+    function renderSaturation() {
+        const plot = el('saturation-plot');
+        if (!window.Plotly || !satX.length) { plot.innerHTML = '<div class="empty">No saturation data</div>'; return; }
+        const traces = [
+            { type: 'scatter', mode: 'lines+markers', x: satX, y: satLib, name: 'Library saturation', line: { color: '#1f9d66' } },
+            { type: 'scatter', mode: 'lines+markers', x: satX, y: satGene, name: 'Gene saturation', line: { color: '#ea7a20', dash: 'dash' } }
+        ];
+        if (medUmi.length === satX.length) traces.push({ type: 'scatter', mode: 'lines+markers', x: satX, y: medUmi, name: 'Median genes', yaxis: 'y2', line: { color: '#2563eb' } });
+        Plotly.newPlot(plot, traces, {
+            height: 280,
+            margin: { l: 48, r: 52, t: 12, b: 52 },
+            xaxis: { title: 'Depth fraction' },
+            yaxis: { title: 'Saturation (%)', range: [0, 105] },
+            yaxis2: { title: 'Median genes', overlaying: 'y', side: 'right' },
+            legend: { orientation: 'h', x: .5, y: -0.2, xanchor: 'center' },
+            plot_bgcolor: 'rgba(0,0,0,0)',
+            paper_bgcolor: 'rgba(0,0,0,0)'
+        }, { responsive: true, displayModeBar: false });
+    }
+    function renderGeneBody() {
+        const plot = el('gene-body-plot');
+        if (!window.Plotly || !geneBodyX.length) { plot.innerHTML = '<div class="empty">No gene body data</div>'; return; }
+        Plotly.newPlot(plot, [
+            { type: 'scatter', mode: 'lines', x: geneBodyX, y: geneBodyInt, name: 'Internal', line: { color: '#2563eb' } },
+            { type: 'scatter', mode: 'lines', x: geneBodyX, y: geneBodyUmi, name: 'UMI', line: { color: '#dc2626' } }
+        ], {
+            height: 280,
+            margin: { l: 48, r: 12, t: 12, b: 52 },
+            xaxis: { title: "Gene body percentile (5'->3')" },
+            yaxis: { title: 'Coverage', range: [0, 1.05] },
+            legend: { orientation: 'h', x: .5, y: -0.2, xanchor: 'center' },
+            plot_bgcolor: 'rgba(0,0,0,0)',
+            paper_bgcolor: 'rgba(0,0,0,0)'
+        }, { responsive: true, displayModeBar: false });
+    }
+    function renderStatsTable() {
+        const table = el('stats-table');
+        const count = el('stats-count');
+        const cols = ['wellID', 'all_reads', 'umi_reads', 'internal_reads', 'MappingRatio', 'UMIfrac', 'Intron_Exon_genes', 'Intron_Exon_umis'];
+        function draw(rows) {
+            count.textContent = rows.length + ' samples';
+            const head = '<thead><tr>' + cols.map(function(c) { return '<th>' + c.replace(/_/g, ' ') + '</th>'; }).join('') + '</tr></thead>';
+            const body = rows.map(function(row) {
+                return '<tr>' + cols.map(function(c) {
+                    const numeric = c !== 'wellID';
+                    const v = (c === 'MappingRatio' || c === 'UMIfrac') ? fmtPct(row[c]) : (numeric ? fmtInt(row[c]) : String(row[c] || ''));
+                    return '<td class="' + (numeric ? 'numeric' : '') + '">' + v + '</td>';
+                }).join('') + '</tr>';
+            }).join('');
+            table.innerHTML = head + '<tbody>' + body + '</tbody>';
+        }
+        el('stats-search').addEventListener('input', function() {
+            const q = String(this.value || '').toLowerCase();
+            draw(stats.filter(function(row) { return String(row.wellID || '').toLowerCase().indexOf(q) >= 0; }));
+        });
+        draw(stats);
+    }
+    renderCards();
+    renderManualDetails();
+    renderSampleComparison();
+    renderUmiReadComparison();
+    renderReadDistribution();
+    renderMetricBarplot();
+    renderSaturation();
+    renderGeneBody();
+    renderStatsTable();
+})();
+</script>
+</body>
+</html>

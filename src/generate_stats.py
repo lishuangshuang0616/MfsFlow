@@ -549,9 +549,9 @@ def main():
     with open(output_table, 'w') as f:
         headers = [
             "wellID", "internal_barcodes", "umi_barcodes", 
-            "internal_reads", "umi_reads", 
+            "internal_reads", "umi_reads", "all_reads",
             "Ambiguity_reads", "Exon_reads", "Intergenic_reads", "intron_reads", 
-            "Unmapped_reads", 
+            "Unmapped_reads", "MappingRatio", "ExonIntronRatio", "UMIfrac",
             "Exon_umis", "Intron_umis", "Intron_Exon_umis",
             "Exon_genes", "Intron_genes", "Intron_Exon_genes",
             "Exon_read_genes", "Intron_read_genes", "Intron_Exon_read_genes"
@@ -571,6 +571,12 @@ def main():
 
             internal_r = r_stats.get('Internal_Reads', 0)
             umi_r = r_stats.get('UMI_Reads', 0)
+            all_r = internal_r + umi_r
+            mapped_r = exon_r + intron_r + inter_r + ambig
+            mapping_denom = mapped_r + unmapped
+            mapping_ratio = (mapped_r / mapping_denom) if mapping_denom > 0 else ""
+            exon_intron_ratio = (exon_r / intron_r) if intron_r > 0 else ""
+            umi_frac = (umi_r / all_r) if all_r > 0 else ""
             
             ex_st = stats_exon.get(well, {'umis': 0, 'genes': 0})
             in_st = stats_intron.get(well, {'umis': 0, 'genes': 0})
@@ -582,9 +588,12 @@ def main():
             
             row = [
                 well, int_bc, umi_bc,
-                internal_r, umi_r,
+                internal_r, umi_r, all_r,
                 ambig, exon_r, inter_r, intron_r,
-                unmapped, 
+                unmapped,
+                f"{mapping_ratio:.6f}" if mapping_ratio != "" else "",
+                f"{exon_intron_ratio:.6f}" if exon_intron_ratio != "" else "",
+                f"{umi_frac:.6f}" if umi_frac != "" else "",
                 ex_st['umis'], in_st['umis'], inex_st['umis'],
                 ex_st['genes'], in_st['genes'], inex_st['genes'],
                 rex_st['genes'], rin_st['genes'], rinex_st['genes']

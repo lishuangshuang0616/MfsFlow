@@ -1510,6 +1510,56 @@ ${plotly_loader_tag}
         .info-item.introns { border-left-color: #9b59b6; }
         .info-item.transcriptome { border-left-color: #f39c12; }
         .text-success { color: #3498DB; }
+        .mode-summary-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 12px;
+            margin-top: 12px;
+        }
+        .mode-summary-card {
+            background: #ffffff;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 14px;
+            min-width: 0;
+        }
+        .mode-summary-value {
+            color: var(--text-primary);
+            font-size: 1.25rem;
+            font-weight: 700;
+            line-height: 1.2;
+            overflow-wrap: anywhere;
+        }
+        .mode-summary-label {
+            color: var(--text-secondary);
+            font-size: 0.78rem;
+            margin-top: 4px;
+        }
+        .mode-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+            background: white;
+        }
+        .mode-table th {
+            background: #f1f5f9;
+            color: #334155;
+            font-weight: 600;
+            padding: 8px 10px;
+            text-align: left;
+            border: 1px solid #e2e8f0;
+            white-space: nowrap;
+        }
+        .mode-table td {
+            color: #475569;
+            padding: 7px 10px;
+            border: 1px solid #e2e8f0;
+            white-space: nowrap;
+        }
+        .mode-table td.numeric {
+            text-align: right;
+            font-weight: 600;
+        }
 </style>
 <script>
     // Normalize fonts across charts: x-axis and annotations
@@ -1739,7 +1789,7 @@ ${plotly_loader_tag}
                                     border-radius: 8px;
                                     border-left: 4px solid #3498db;
                                     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-                                "><strong style="color: #2980b9;">Number of cells:</strong> The number of barcodes identified as real cells (not background noise or empty droplets) in the sequencing data. This is predicted using an empty droplet model (EmptyDrops) after merging cell barcodes from the same droplet. Values higher or lower than expected may indicate inaccurate cell counting, cell lysis, or failures in droplet generation.</li>
+                                "><strong style="color: #2980b9;">Number of wells/samples:</strong> The number of expected barcoded wells or manual samples included in the result table.</li>
 <li style="
                                     margin-bottom: 12px;
                                     padding: 12px;
@@ -1747,7 +1797,7 @@ ${plotly_loader_tag}
                                     border-radius: 8px;
                                     border-left: 4px solid #e74c3c;
                                     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-                                "><strong style="color: #c0392b;">Median UMI per cell:</strong> The median number of unique molecular identifiers (UMIs) detected per cell among all identified cells.</li>
+                                "><strong style="color: #c0392b;">Median UMI per well/sample:</strong> The median number of unique molecular identifiers (UMIs) detected per well or manual sample.</li>
 <li style="
                                     margin-bottom: 12px;
                                     padding: 12px;
@@ -1755,7 +1805,7 @@ ${plotly_loader_tag}
                                     border-radius: 8px;
                                     border-left: 4px solid #27ae60;
                                     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-                                "><strong style="color: #229954;">Median gene per cell:</strong> The median number of unique genes with detectable expression in each cell.</li>
+                                "><strong style="color: #229954;">Median gene per well/sample:</strong> The median number of unique genes with detectable expression per well or manual sample.</li>
 </ul>
 </div>
 <!-- Summary Stats -->
@@ -1763,19 +1813,19 @@ ${plotly_loader_tag}
 <div class="summary-card">
 <div class="summary-card-content">
 <div class="value">${rna_estm_Num_cell}</div>
-<div class="label">Number of cells</div>
+<div class="label">Number of wells/samples</div>
 </div>
 </div>
 <div class="summary-card">
 <div class="summary-card-content">
 <div class="value">${rna_median_umis_percell}</div>
-<div class="label">Median UMI per cell</div>
+<div class="label">Median UMI per well/sample</div>
 </div>
 </div>
 <div class="summary-card">
 <div class="summary-card-content">
 <div class="value">${rna_median_genes_percell}</div>
-<div class="label">Median gene per cell</div>
+<div class="label">Median gene per well/sample</div>
 </div>
 </div>
 </div>
@@ -1806,7 +1856,192 @@ ${plotly_loader_tag}
                                     }
                                 });
                             }
-                        </script>
+</script>
+</section>
+
+<section class="section-card" id="barcode-mode-summary">
+    <h3>Barcode and Sample Summary</h3>
+    <div id="barcode-mode-cards" class="mode-summary-grid"></div>
+
+    <div id="auto-report-block" style="margin-top: 18px;">
+        <h4 style="color: #2c3e50; margin-bottom: 10px;">Auto Plate Overview</h4>
+        <div class="marker-table-container" style="padding: 0;">
+            <table class="mode-table">
+                <thead>
+                    <tr>
+                        <th>Plate</th>
+                        <th>Expected wells</th>
+                        <th>Active wells</th>
+                        <th>Active fraction</th>
+                        <th>Median reads</th>
+                        <th>Median genes</th>
+                        <th>Median UMIs</th>
+                    </tr>
+                </thead>
+                <tbody id="auto-plate-summary-body"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <div id="manual-report-block" style="margin-top: 18px;">
+        <h4 style="color: #2c3e50; margin-bottom: 10px;">Manual Sample Overview</h4>
+        <div id="manual-sample-plot" class="plot-placeholder" data-plot-id="manual-sample-plot" style="width: 100%; height: 320px; margin-bottom: 14px;"></div>
+        <div class="marker-table-container" style="padding: 0;">
+            <table class="mode-table">
+                <thead>
+                    <tr>
+                        <th>Sample</th>
+                        <th>All reads</th>
+                        <th>UMI reads</th>
+                        <th>Internal reads</th>
+                        <th>Genes</th>
+                        <th>UMIs</th>
+                        <th>Mapping ratio</th>
+                    </tr>
+                </thead>
+                <tbody id="manual-sample-summary-body"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        (function() {
+            const sampleType = String('${sample_type}' || '').trim().toLowerCase();
+            const cardsEl = document.getElementById('barcode-mode-cards');
+            const autoBlock = document.getElementById('auto-report-block');
+            const manualBlock = document.getElementById('manual-report-block');
+            const autoBody = document.getElementById('auto-plate-summary-body');
+            const manualBody = document.getElementById('manual-sample-summary-body');
+
+            const parseArray = (raw) => {
+                try {
+                    const parsed = JSON.parse(String(raw || '[]'));
+                    return Array.isArray(parsed) ? parsed : [];
+                } catch (e) {
+                    return [];
+                }
+            };
+            const cards = parseArray('${barcode_mode_cards_data}');
+            const manualRows = parseArray('${manual_barcode_table_data}');
+            const plateRows = parseArray('${auto_plate_summary_data}');
+            const fmtInt = (v) => {
+                const n = Number(v);
+                if (!Number.isFinite(n)) return '';
+                return Math.round(n).toLocaleString();
+            };
+            const fmtPct = (v) => {
+                const n = Number(v);
+                if (!Number.isFinite(n)) return '';
+                return (n * 100).toFixed(1) + '%';
+            };
+
+            if (cardsEl) {
+                cardsEl.innerHTML = '';
+                cards.forEach((item) => {
+                    const div = document.createElement('div');
+                    div.className = 'mode-summary-card';
+                    const val = document.createElement('div');
+                    val.className = 'mode-summary-value';
+                    val.textContent = item && item.value ? String(item.value) : '';
+                    const label = document.createElement('div');
+                    label.className = 'mode-summary-label';
+                    label.textContent = item && item.label ? String(item.label) : '';
+                    div.appendChild(val);
+                    div.appendChild(label);
+                    cardsEl.appendChild(div);
+                });
+            }
+
+            if (sampleType === 'auto') {
+                if (manualBlock) manualBlock.remove();
+                if (autoBody) {
+                    autoBody.innerHTML = '';
+                    plateRows.forEach((row) => {
+                        const tr = document.createElement('tr');
+                        [
+                            row.plate,
+                            fmtInt(row.expected_wells),
+                            fmtInt(row.active_wells),
+                            fmtPct(row.active_fraction),
+                            fmtInt(row.median_reads),
+                            fmtInt(row.median_genes),
+                            fmtInt(row.median_umis),
+                        ].forEach((v, idx) => {
+                            const td = document.createElement('td');
+                            if (idx > 0) td.className = 'numeric';
+                            td.textContent = v || '';
+                            tr.appendChild(td);
+                        });
+                        autoBody.appendChild(tr);
+                    });
+                    if (!plateRows.length) {
+                        autoBody.innerHTML = '<tr><td colspan="7">No available plate summary.</td></tr>';
+                    }
+                }
+            } else {
+                if (autoBlock) autoBlock.remove();
+                if (manualBody) {
+                    manualBody.innerHTML = '';
+                    manualRows.forEach((row) => {
+                        const tr = document.createElement('tr');
+                        [
+                            row.wellID,
+                            fmtInt(row.all_reads),
+                            fmtInt(row.umi_reads),
+                            fmtInt(row.internal_reads),
+                            fmtInt(row.genes),
+                            fmtInt(row.umis),
+                            fmtPct(row.mapping_ratio),
+                        ].forEach((v, idx) => {
+                            const td = document.createElement('td');
+                            if (idx > 0) td.className = 'numeric';
+                            td.textContent = v || '';
+                            tr.appendChild(td);
+                        });
+                        manualBody.appendChild(tr);
+                    });
+                    if (!manualRows.length) {
+                        manualBody.innerHTML = '<tr><td colspan="7">No available manual sample summary.</td></tr>';
+                    }
+                }
+
+                const plotEl = document.getElementById('manual-sample-plot');
+                if (plotEl && window.Plotly && manualRows.length) {
+                    const labels = manualRows.map(r => String(r.wellID || ''));
+                    const traceReads = {
+                        type: 'bar',
+                        name: 'All reads',
+                        x: labels,
+                        y: manualRows.map(r => Number(r.all_reads) || 0),
+                        marker: { color: '#3498DB' },
+                        yaxis: 'y'
+                    };
+                    const traceGenes = {
+                        type: 'scatter',
+                        mode: 'lines+markers',
+                        name: 'Genes',
+                        x: labels,
+                        y: manualRows.map(r => Number(r.genes) || 0),
+                        marker: { color: '#27AE60' },
+                        line: { color: '#27AE60', width: 2 },
+                        yaxis: 'y2'
+                    };
+                    const layout = {
+                        margin: { l: 55, r: 55, t: 20, b: 70 },
+                        xaxis: { title: { text: 'Sample' }, tickangle: labels.length > 8 ? -45 : 0 },
+                        yaxis: { title: { text: 'Reads' }, rangemode: 'tozero' },
+                        yaxis2: { title: { text: 'Genes' }, overlaying: 'y', side: 'right', rangemode: 'tozero' },
+                        legend: { orientation: 'h', x: 0.5, y: -0.25, xanchor: 'center' },
+                        plot_bgcolor: 'rgba(0,0,0,0)',
+                        paper_bgcolor: 'rgba(0,0,0,0)'
+                    };
+                    Plotly.newPlot(plotEl, [traceReads, traceGenes], layout, { responsive: true, displayModeBar: false });
+                } else if (plotEl) {
+                    plotEl.innerHTML = '<div style="text-align:center;color:#94a3b8;padding-top:80px;">No available data</div>';
+                }
+            }
+        })();
+    </script>
 </section>
 
 <!-- Sequencing Data Distribution -->
@@ -1965,7 +2200,7 @@ ${plotly_loader_tag}
                         boxEl.innerHTML = '<div style="text-align:center;color:#94a3b8;">No available data</div>';
                     } else {
                         const boxLayout = {
-                            yaxis: { title: { text: '% reads/cell' }, fixedrange: true, gridcolor: 'lightgray' },
+                            yaxis: { title: { text: '% reads/well' }, fixedrange: true, gridcolor: 'lightgray' },
                             xaxis: { fixedrange: true },
                             margin: { l: 60, r: 10, t: 10, b: 40 },
                             height: 260,
@@ -2391,7 +2626,7 @@ ${plotly_loader_tag}
 <!-- Library Type Selector removed; using global selector above -->
 <!-- Sample Statistics and Violin Plot Section -->
 <section class="section-card" data-library-content="gene-expression">
-<h3 class="tooltip" data-tooltip="Key quality metrics for the single-cell RNA sequencing sample">RNA Quality Metrics
+<h3 class="tooltip" data-tooltip="Key quality metrics for the RNA sequencing sample">RNA Quality Metrics
                                 <button id="toggle-cells-explanation" onmouseout="this.style.transform='scale(1)'; this.style.boxShadow='0 2px 8px rgba(59, 130, 246, 0.3)'; this.style.background='#3b82f6'" onmouseover="this.style.transform='scale(1.1)'; this.style.boxShadow='0 4px 12px rgba(59, 130, 246, 0.4)'; this.style.background='#2563eb'" style="
                                     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
                                     color: white;
@@ -2426,7 +2661,7 @@ ${plotly_loader_tag}
                                     border-bottom: 2px solid #3498db;
                                     padding-bottom: 8px;
                                     display: inline-block;
-                                ">Cell Quality Metrics Explanation</h4>
+                                ">Well/Sample Quality Metrics Explanation</h4>
 <ul style="
                                     list-style: none;
                                     padding: 0;
@@ -2439,7 +2674,7 @@ ${plotly_loader_tag}
                                         border-radius: 8px;
                                         border-left: 4px solid #e74c3c;
                                         box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-                                    "><strong style="color: #C0392B;">Mean reads per cell:</strong> The average number of raw sequencing reads per cell, calculated by dividing the total raw reads by the number of identified cells.</li>
+                                    "><strong style="color: #C0392B;">Mean reads per well/sample:</strong> The average number of assigned sequencing reads per expected well or manual sample.</li>
 <li style="
                                         margin-bottom: 12px;
                                         padding: 12px;
@@ -2447,7 +2682,7 @@ ${plotly_loader_tag}
                                         border-radius: 8px;
                                         border-left: 4px solid #27AE60;
                                         box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-                                    "><strong style="color: #229954;">UMI counts per cell:</strong>  The number of unique transcript molecules captured per cell after UMI deduplication. Both mean and median values shown.</li>
+                                    "><strong style="color: #229954;">UMI counts per well/sample:</strong> The number of unique transcript molecules after UMI deduplication. Both mean and median values are shown.</li>
 <li style="
                                         margin-bottom: 12px;
                                         padding: 12px;
@@ -2455,7 +2690,7 @@ ${plotly_loader_tag}
                                         border-radius: 8px;
                                         border-left: 4px solid #f39c12;
                                         box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-                                    "><strong style="color: #e67e22;">Total genes detected:</strong> The total number of distinct genes detected across all cells in the dataset. This serves as an indicator of the biological diversity and overall sensitivity of the experiment.</li>
+                                    "><strong style="color: #e67e22;">Total genes detected:</strong> The total number of distinct genes detected across all wells or manual samples.</li>
 <li style="
                                         margin-bottom: 12px;
                                         padding: 12px;
@@ -2463,7 +2698,7 @@ ${plotly_loader_tag}
                                         border-radius: 8px;
                                         border-left: 4px solid #9b59b6;
                                         box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-                                    "><strong style="color: #8e44ad;">Genes per cell:</strong> Number of detected genes reflects cell viability and transcriptional complexity. Both mean and median values shown.</li>
+                                    "><strong style="color: #8e44ad;">Genes per well/sample:</strong> Number of detected genes reflects library complexity. Both mean and median values are shown.</li>
 <li style="
                                         margin-bottom: 12px;
                                         padding: 12px;
@@ -2471,7 +2706,7 @@ ${plotly_loader_tag}
                                         border-radius: 8px;
                                         border-left: 4px solid #34495e;
                                         box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-                                    "><strong style="color: #2c3e50;">Fraction reads in cells:</strong> The proportion of reads that are uniquely mapped to the transcriptome and associated with a valid cell barcode, indicating the efficiency of cell capture.</li>
+                                    "><strong style="color: #2c3e50;">Transcriptome fraction:</strong> The proportion of reads assigned to exonic or intronic transcriptome features among classified reads.</li>
 <li style="
                                         margin-bottom: 0;
                                         padding: 12px;
@@ -2479,7 +2714,7 @@ ${plotly_loader_tag}
                                         border-radius: 8px;
                                         border-left: 4px solid #6366F1;
                                         box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-                                    "><strong style="color: #1D4ED8;">RNA Violin Plot:</strong> A violin plot illustrating the distribution of Genes (number of genes detected), UMIs (number of UMIs) and Mito.percent across all cells, providing insights into data quality and variability.</li>
+                                    "><strong style="color: #1D4ED8;">Distribution plots:</strong> The plots show distributions of genes, UMIs, reads, and mapping-derived metrics across wells or samples.</li>
 </ul>
 </div>
 <div class="responsive-two-col-grid">
@@ -2497,19 +2732,19 @@ ${plotly_loader_tag}
 <tbody>
 <tr style="background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);">
 <td style="padding: 12px 15px; font-weight: 600; color: #2c3e50; border-bottom: 1px solid #dee2e6;">
-                                                        Mean reads per cell
+                                                        Mean reads per well/sample
 </td>
 <td style="padding: 12px 15px; color: #495057; border-bottom: 1px solid #dee2e6; font-weight: 600; text-align: right;">${rna_mean_reads_percell}</td>
 </tr>
 <tr style="background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);">
 <td style="padding: 12px 15px; font-weight: 600; color: #2c3e50; border-bottom: 1px solid #dee2e6;">
-                                                        Mean UMI counts per cell
+                                                        Mean UMI counts per well/sample
 </td>
 <td style="padding: 12px 15px; color: #495057; border-bottom: 1px solid #dee2e6; font-weight: 600; text-align: right;">${rna_mean_umis_percell}</td>
 </tr>
 <tr style="background: white;">
 <td style="padding: 12px 15px; font-weight: 600; color: #2c3e50; border-bottom: 1px solid #dee2e6;">
-                                                        Median UMI counts per cell
+                                                        Median UMI counts per well/sample
 </td>
 <td style="padding: 12px 15px; color: #495057; border-bottom: 1px solid #dee2e6; font-weight: 600; text-align: right;">${rna_median_umis_percell}</td>
 </tr>
@@ -2521,13 +2756,13 @@ ${plotly_loader_tag}
 </tr>
 <tr style="background: white;">
 <td style="padding: 12px 15px; font-weight: 600; color: #2c3e50; border-bottom: 1px solid #dee2e6;">
-                                                        Mean Genes per cell
+                                                        Mean genes per well/sample
 </td>
 <td style="padding: 12px 15px; color: #495057; border-bottom: 1px solid #dee2e6; font-weight: 600; text-align: right;">${rna_mean_genes_percell}</td>
 </tr>
 <tr style="background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);">
 <td style="padding: 12px 15px; font-weight: 600; color: #2c3e50; border-bottom: 1px solid #dee2e6;">
-                                                        Median Genes per cell
+                                                        Median genes per well/sample
 </td>
 <td style="padding: 12px 15px; color: #495057; border-bottom: 1px solid #dee2e6; font-weight: 600; text-align: right;">${rna_median_genes_percell}</td>
 </tr>
@@ -2657,7 +2892,7 @@ ${plotly_loader_tag}
 </section>
 
 <section class="section-card" data-library-content="gene-expression">
-<h3 class="tooltip" data-tooltip="Analysis of bead-to-cell mapping and barcode rank distribution for RNA">RNA Beads to Cells
+<h3 class="tooltip" data-tooltip="Distribution of per-well RNA QC metrics">RNA Well QC
                                 <button id="toggle-rna-beads-explanation" onmouseout="this.style.transform='scale(1)'; this.style.boxShadow='0 2px 8px rgba(59, 130, 246, 0.3)'; this.style.background='#3b82f6'" onmouseover="this.style.transform='scale(1.1)'; this.style.boxShadow='0 4px 12px rgba(59, 130, 246, 0.4)'; this.style.background='#2563eb'" style="
                                     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
                                     color: white;
@@ -2692,7 +2927,7 @@ ${plotly_loader_tag}
                                     border-bottom: 2px solid #3498db;
                                     padding-bottom: 8px;
                                     display: inline-block;
-                                ">RNA Beads to Cells Analysis Explanation</h4>
+                                ">RNA Well QC Explanation</h4>
 <ul style="
                                     list-style: none;
                                     padding: 0;
@@ -2705,7 +2940,7 @@ ${plotly_loader_tag}
                                         border-radius: 8px;
                                         border-left: 4px solid #3498db;
                                         box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-                                    "><strong style="color: #2980b9;">RNA Barcode Rank Plot (left):</strong> In the library, transcripts from the same cell are grouped under a unified cell ID, each tagged with unique molecular identifiers (UMIs). However, RNA from ambient sources or dying cells may also be captured during library preparation. This barcode rank plot visualizes the distribution of total UMI counts per cell ID (x-axis: cell ID rank; y-axis: UMI count, both in log scale). Cell IDs with higher UMI counts (on the left) are more likely to represent real cells, while lower-count IDs (on the right) are often background. Blue points indicate high-confidence cells, gray points represent background (e.g., empty droplets), and the blue gradient region marks a transitional zone identified by an ambient RNA model. Hovering over each point reveals its rank, UMI count, and the percentage of real cells in its neighborhood, aiding in the distinction between true cells and noise.</li>
+                                    "><strong style="color: #2980b9;">Histogram:</strong> Distribution of selected QC metrics across wells or manual samples.</li>
 <li style="
                                         margin-bottom: 0;
                                         padding: 12px;
@@ -2713,7 +2948,7 @@ ${plotly_loader_tag}
                                         border-radius: 8px;
                                         border-left: 4px solid #e74c3c;
                                         box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-                                    "><strong style="color: #c0392b;">Bead Count Distribution (right):</strong> This plot displays the distribution of barcoded bead counts per droplet among identified real cells. While the number of beads per droplet is theoretically expected to follow a Poisson distribution, deviations may occur due to factors such as low RNA capture or inefficient bead merging. The distribution is affected by cell filtering thresholds and dynamically updates accordingly. If most droplets contain only one bead, it is advisable to check whether the oligo library has sufficient sequencing depth (recommended >50M reads) and whether it is properly matched to the cDNA library, as these factors can impact overall data quality and cell recovery.</li>
+                                    "><strong style="color: #c0392b;">Density plot:</strong> Relationship between total reads and the selected QC metric, useful for finding low-yield or outlier wells.</li>
 </ul>
 </div>
 <div class="responsive-two-col-grid">
@@ -3353,7 +3588,7 @@ ${plotly_loader_tag}
 <!-- Library Type Selector removed; using global selector above -->
 <!-- Rewritten to match UMI-based layout -->
 <section class="section-card" data-library-content="gene-expression">
-<h3 class="tooltip" data-tooltip="Key quality metrics for the single-cell RNA sequencing sample">RNA Quality Metrics
+<h3 class="tooltip" data-tooltip="Key quality metrics for the RNA sequencing sample">RNA Quality Metrics
                                 <button id="toggle-library-cells-explanation" onmouseout="this.style.transform='scale(1)'; this.style.boxShadow='0 2px 8px rgba(59, 130, 246, 0.3)'; this.style.background='#3b82f6'" onmouseover="this.style.transform='scale(1.1)'; this.style.boxShadow='0 4px 12px rgba(59, 130, 246, 0.4)'; this.style.background='#2563eb'" style="
                                     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
                                     color: white;
@@ -3388,7 +3623,7 @@ ${plotly_loader_tag}
                                     border-bottom: 2px solid #3498db;
                                     padding-bottom: 8px;
                                     display: inline-block;
-                                ">Cell Quality Metrics Explanation</h4>
+                                ">Well/Sample Quality Metrics Explanation</h4>
 <ul style="
                                     list-style: none;
                                     padding: 0;
@@ -3401,7 +3636,7 @@ ${plotly_loader_tag}
                                         border-radius: 8px;
                                         border-left: 4px solid #e74c3c;
                                         box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-                                    "><strong style="color: #C0392B;">Mean reads per cell:</strong> The average number of raw sequencing reads per cell, calculated by dividing the total raw reads by the number of identified cells.</li>
+                                    "><strong style="color: #C0392B;">Mean reads per well/sample:</strong> The average number of assigned sequencing reads per expected well or manual sample.</li>
 <li style="
                                         margin-bottom: 12px;
                                         padding: 12px;
@@ -3409,7 +3644,7 @@ ${plotly_loader_tag}
                                         border-radius: 8px;
                                         border-left: 4px solid #27AE60;
                                         box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-                                    "><strong style="color: #229954;">UMI counts per cell:</strong>  The number of unique transcript molecules captured per cell after UMI deduplication. Both mean and median values shown.</li>
+                                    "><strong style="color: #229954;">Read counts per well/sample:</strong> Read-based counts summarized per expected well or manual sample.</li>
 <li style="
                                         margin-bottom: 12px;
                                         padding: 12px;
@@ -3417,7 +3652,7 @@ ${plotly_loader_tag}
                                         border-radius: 8px;
                                         border-left: 4px solid #f39c12;
                                         box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-                                    "><strong style="color: #e67e22;">Total genes detected:</strong> The total number of distinct genes detected across all cells in the dataset. This serves as an indicator of the biological diversity and overall sensitivity of the experiment.</li>
+                                    "><strong style="color: #e67e22;">Total genes detected:</strong> The total number of distinct genes detected across all wells or manual samples.</li>
 <li style="
                                         margin-bottom: 12px;
                                         padding: 12px;
@@ -3425,7 +3660,7 @@ ${plotly_loader_tag}
                                         border-radius: 8px;
                                         border-left: 4px solid #9b59b6;
                                         box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-                                    "><strong style="color: #8e44ad;">Genes per cell:</strong> Number of detected genes reflects cell viability and transcriptional complexity. Both mean and median values shown.</li>
+                                    "><strong style="color: #8e44ad;">Genes per well/sample:</strong> Number of detected genes reflects library complexity. Both mean and median values are shown.</li>
 <li style="
                                         margin-bottom: 12px;
                                         padding: 12px;
@@ -3433,7 +3668,7 @@ ${plotly_loader_tag}
                                         border-radius: 8px;
                                         border-left: 4px solid #34495e;
                                         box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-                                    "><strong style="color: #2c3e50;">Fraction reads in cells:</strong> The proportion of reads that are uniquely mapped to the transcriptome and associated with a valid cell barcode, indicating the efficiency of cell capture.</li>
+                                    "><strong style="color: #2c3e50;">Transcriptome fraction:</strong> The proportion of reads assigned to exonic or intronic transcriptome features among classified reads.</li>
 <li style="
                                         margin-bottom: 0;
                                         padding: 12px;
@@ -3441,7 +3676,7 @@ ${plotly_loader_tag}
                                         border-radius: 8px;
                                         border-left: 4px solid #6366F1;
                                         box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-                                    "><strong style="color: #1D4ED8;">Gene and UMI Counts by Type:</strong> Boxplots show per-cell distributions by feature type.</li>
+                                    "><strong style="color: #1D4ED8;">Gene and read counts by type:</strong> Boxplots show per-well distributions by feature type.</li>
 </ul>
 </div>
 <div class="responsive-two-col-grid">
@@ -3457,15 +3692,15 @@ ${plotly_loader_tag}
                                         ">
 <tbody>
 <tr style="background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);">
-<td style="padding: 12px 15px; font-weight: 600; color: #2c3e50; border-bottom: 1px solid #dee2e6;">Mean reads per cell</td>
+<td style="padding: 12px 15px; font-weight: 600; color: #2c3e50; border-bottom: 1px solid #dee2e6;">Mean reads per well/sample</td>
 <td style="padding: 12px 15px; color: #495057; border-bottom: 1px solid #dee2e6; font-weight: 600; text-align: right;">${rna_mean_reads_percell}</td>
 </tr>
 <tr style="background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);">
-<td style="padding: 12px 15px; font-weight: 600; color: #2c3e50; border-bottom: 1px solid #dee2e6;">Mean Read counts per cell</td>
+<td style="padding: 12px 15px; font-weight: 600; color: #2c3e50; border-bottom: 1px solid #dee2e6;">Mean read counts per well/sample</td>
 <td style="padding: 12px 15px; color: #495057; border-bottom: 1px solid #dee2e6; font-weight: 600; text-align: right;">${rna_mean_umis_percell}</td>
 </tr>
 <tr style="background: white;">
-<td style="padding: 12px 15px; font-weight: 600; color: #2c3e50; border-bottom: 1px solid #dee2e6;">Median Read counts per cell</td>
+<td style="padding: 12px 15px; font-weight: 600; color: #2c3e50; border-bottom: 1px solid #dee2e6;">Median read counts per well/sample</td>
 <td style="padding: 12px 15px; color: #495057; border-bottom: 1px solid #dee2e6; font-weight: 600; text-align: right;">${rna_median_umis_percell}</td>
 </tr>
 <tr style="background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);">
@@ -3473,11 +3708,11 @@ ${plotly_loader_tag}
 <td style="padding: 12px 15px; color: #495057; border-bottom: 1px solid #dee2e6; font-weight: 600; text-align: right;">${rna_total_gene}</td>
 </tr>
 <tr style="background: white;">
-<td style="padding: 12px 15px; font-weight: 600; color: #2c3e50; border-bottom: 1px solid #dee2e6;">Mean Genes per cell</td>
+<td style="padding: 12px 15px; font-weight: 600; color: #2c3e50; border-bottom: 1px solid #dee2e6;">Mean genes per well/sample</td>
 <td style="padding: 12px 15px; color: #495057; border-bottom: 1px solid #dee2e6; font-weight: 600; text-align: right;">${rna_mean_genes_percell}</td>
 </tr>
 <tr style="background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);">
-<td style="padding: 12px 15px; font-weight: 600; color: #2c3e50; border-bottom: 1px solid #dee2e6;">Median Genes per cell</td>
+<td style="padding: 12px 15px; font-weight: 600; color: #2c3e50; border-bottom: 1px solid #dee2e6;">Median genes per well/sample</td>
 <td style="padding: 12px 15px; color: #495057; border-bottom: 1px solid #dee2e6; font-weight: 600; text-align: right;">${rna_median_genes_percell}</td>
 </tr>
 </tbody>
@@ -3619,7 +3854,7 @@ ${plotly_loader_tag}
 </section>
 
 <section class="section-card" data-library-content="gene-expression">
-<h3 class="tooltip" data-tooltip="Analysis of bead-to-cell mapping and barcode rank distribution for RNA">RNA Beads to Cells
+<h3 class="tooltip" data-tooltip="Distribution of per-well RNA QC metrics">RNA Well QC
                                 <button id="toggle-rna-beads-explanation-read" onmouseout="this.style.transform='scale(1)'; this.style.boxShadow='0 2px 8px rgba(59, 130, 246, 0.3)'; this.style.background='#3b82f6'" onmouseover="this.style.transform='scale(1.1)'; this.style.boxShadow='0 4px 12px rgba(59, 130, 246, 0.4)'; this.style.background='#2563eb'" style="
                                     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
                                     color: white;
@@ -3654,7 +3889,7 @@ ${plotly_loader_tag}
                                     border-bottom: 2px solid #3498db;
                                     padding-bottom: 8px;
                                     display: inline-block;
-                                ">RNA Beads to Cells Analysis Explanation</h4>
+                                ">RNA Well QC Explanation</h4>
 <ul style="
                                     list-style: none;
                                     padding: 0;
@@ -3667,7 +3902,7 @@ ${plotly_loader_tag}
                                         border-radius: 8px;
                                         border-left: 4px solid #3498db;
                                         box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-                                    "><strong style="color: #2980b9;">Histogram (left):</strong> Distribution of selected metrics across wells/cells.</li>
+                                    "><strong style="color: #2980b9;">Histogram:</strong> Distribution of selected metrics across wells or manual samples.</li>
 <li style="
                                         margin-bottom: 0;
                                         padding: 12px;
