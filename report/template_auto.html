@@ -7,7 +7,8 @@
 ${plotly_loader_tag}
 <style>
     :root {
-        --bg: #f6f8fb;
+        --bg: #f3f6fb;
+        --bg-accent: #eef4ff;
         --panel: #ffffff;
         --text: #172033;
         --muted: #64748b;
@@ -20,12 +21,14 @@ ${plotly_loader_tag}
     * { box-sizing: border-box; }
     body {
         margin: 0;
-        background: var(--bg);
+        background:
+            radial-gradient(1200px 420px at 50% -120px, var(--bg-accent), transparent 60%),
+            var(--bg);
         color: var(--text);
         font-family: Inter, -apple-system, BlinkMacSystemFont, "PingFang SC", "Segoe UI", Arial, sans-serif;
         font-size: 13px;
     }
-    .shell { max-width: 1180px; margin: 0 auto; padding: 18px; }
+    .shell { max-width: 1200px; margin: 0 auto; padding: 18px; }
     .hero {
         background: linear-gradient(135deg, #115e45, #1f9d66);
         color: #fff;
@@ -45,45 +48,116 @@ ${plotly_loader_tag}
     .panel {
         background: var(--panel);
         border: 1px solid var(--line);
-        border-radius: 8px;
-        padding: 16px;
+        border-radius: 10px;
+        padding: 18px;
         margin-top: 14px;
-        box-shadow: 0 1px 2px rgba(15, 23, 42, .04);
+        box-shadow: 0 4px 14px rgba(15, 23, 42, .05);
     }
     .card {
         background: var(--panel);
         border: 1px solid var(--line);
-        border-radius: 8px;
+        border-radius: 10px;
         padding: 14px;
+        box-shadow: 0 2px 8px rgba(15, 23, 42, .04);
     }
-    .card-value { font-size: 21px; font-weight: 700; overflow-wrap: anywhere; }
+    .card-value { font-size: 22px; font-weight: 700; overflow-wrap: anywhere; letter-spacing: 0; }
     .card-label { color: var(--muted); margin-top: 5px; font-size: 12px; }
-    h2 { font-size: 17px; margin: 0 0 12px; }
+    h2 {
+        font-size: 17px;
+        margin: 0 0 14px;
+        padding-bottom: 8px;
+        border-bottom: 1px solid #edf2f7;
+    }
     h3 { font-size: 14px; margin: 0 0 10px; color: #263244; }
     .muted { color: var(--muted); }
     .toolbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
     select, input {
         border: 1px solid var(--line);
         border-radius: 6px;
-        padding: 6px 9px;
-        background: #fff;
+        padding: 6px 32px 6px 12px;
+        background: #fff url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="%2364748b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>') no-repeat right 8px center;
+        background-size: 14px;
+        color: var(--text);
+        appearance: none;
+        -webkit-appearance: none;
+        font-family: inherit;
+        font-size: 13px;
+        box-shadow: 0 1px 2px rgba(15, 23, 42, .04);
+        transition: border-color 0.15s ease;
+    }
+    input {
+        padding: 6px 12px;
+        background-image: none;
+    }
+    select:focus, input:focus {
+        outline: none;
+        border-color: var(--blue);
+        box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
+    }
+    .btn {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        padding: 6px 12px;
+        color: var(--text);
+        cursor: pointer;
+        font-weight: 500;
+        box-shadow: 0 1px 2px rgba(15, 23, 42, .04);
+        transition: all 0.15s ease;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+    }
+    .btn:hover { background: #f8fafc; border-color: #cbd5e1; }
+
+    .pagination {
+        display: flex;
+        gap: 4px;
+        align-items: center;
+        margin-top: 12px;
+        justify-content: flex-end;
+    }
+    .page-btn {
+        padding: 4px 10px;
+        border: 1px solid var(--line);
+        background: var(--panel);
+        cursor: pointer;
+        border-radius: 4px;
         color: var(--text);
     }
+    .page-btn:hover { background: #f1f5f9; }
+    .page-btn.active { background: var(--blue); color: white; border-color: var(--blue); }
+    .page-btn[disabled] { opacity: 0.5; cursor: not-allowed; }
+
+    th.sortable { cursor: pointer; user-select: none; }
+    th.sortable:hover { background: #e2e8f0; }
+    th.sortable::after { content: '↕'; margin-left: 6px; opacity: 0.3; font-size: 11px; }
+    th.sortable.asc::after { content: '↑'; opacity: 1; }
+    th.sortable.desc::after { content: '↓'; opacity: 1; }
     table { width: 100%; border-collapse: collapse; background: #fff; }
     th, td { border: 1px solid var(--line); padding: 6px 8px; white-space: nowrap; }
     th { background: #f1f5f9; text-align: left; font-weight: 700; }
     td.numeric { text-align: right; font-weight: 600; }
     .table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; }
+    .plate-overview-table { width: auto; min-width: 860px; }
     .table-wrap table { border: 0; }
     .table-wrap th:first-child, .table-wrap td:first-child { border-left: 0; }
     .table-wrap th:last-child, .table-wrap td:last-child { border-right: 0; }
-    .plot { width: 100%; height: 280px; min-height: 240px; }
-    .compact-plot { height: 240px; min-height: 220px; margin-top: 12px; }
-    .plate-plot { height: 500px; min-height: 420px; }
+    .plot {
+        width: 100%;
+        height: 340px;
+        min-height: 300px;
+        border: 1px solid #edf2f7;
+        border-radius: 8px;
+        background: #fcfdff;
+        padding: 6px;
+    }
+    .compact-plot { height: 320px; min-height: 280px; margin-top: 12px; }
+    .plate-plot { height: 520px; min-height: 460px; }
     .empty { color: var(--muted); display: flex; align-items: center; justify-content: center; min-height: 120px; }
     details { margin-top: 16px; }
     summary { cursor: pointer; color: var(--muted); font-weight: 600; }
-    pre { overflow-x: auto; background: #0f172a; color: #e2e8f0; padding: 14px; border-radius: 8px; font-size: 12px; }
+    pre { overflow-x: auto; background: #f8fafc; color: #1e293b; border: 1px solid #e2e8f0; padding: 14px; border-radius: 8px; font-size: 12px; }
     footer { color: var(--muted); text-align: center; padding: 20px 0 8px; }
     @media (max-width: 900px) {
         .shell { padding: 12px; }
@@ -105,22 +179,27 @@ ${plotly_loader_tag}
 
     <section class="grid cards" id="summary-cards"></section>
 
+
+
     <section class="panel">
         <h2>Plate Overview</h2>
+        <div class="muted" style="margin-bottom: 10px;">Active well: all reads &gt; 0.</div>
         <div class="table-wrap">
-            <table>
+            <table class="plate-overview-table">
                 <thead>
                     <tr>
                         <th>Plate</th>
                         <th>Expected wells</th>
                         <th>Active wells</th>
-                        <th>Active fraction</th>
                         <th>Median reads</th>
                         <th>Median genes</th>
                         <th>Median UMIs</th>
+                        <th>Median mapping</th>
+                        <th>Median UMI fraction</th>
+                        <th>Median Exon+Intron / All</th>
                     </tr>
                 </thead>
-                <tbody id="plate-summary-body"></tbody>
+                <tbody id="plate-overview-body"></tbody>
             </table>
         </div>
     </section>
@@ -174,16 +253,18 @@ ${plotly_loader_tag}
         <div class="panel">
             <h2>Per-Well QC Distribution</h2>
             <div class="toolbar">
+                <label><input type="checkbox" id="metric-logx" checked/> Log Scale</label>
                 <label>Metric
-                    <select id="hist-metric">
-                        <option value="allreads">All reads</option>
-                        <option value="genes">Genes</option>
+                    <select id="metric-y">
+                        <option value="mappingratio">MappingRatio</option>
+                        <option value="exonintronratio">ExonIntronRatio</option>
+                        <option value="umifrac">UMIfrac</option>
                         <option value="umis">UMIs</option>
-                        <option value="mappingratio">Mapping ratio</option>
+                        <option value="genes">Genes</option>
                     </select>
                 </label>
             </div>
-            <div id="metric-histogram" class="plot"></div>
+            <div id="metric-scatter" class="plot"></div>
         </div>
     </section>
 
@@ -199,7 +280,13 @@ ${plotly_loader_tag}
     </section>
 
     <section class="panel">
-        <h2>Per-Well Statistics</h2>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+            <h2 style="margin: 0;">Per-Well Statistics</h2>
+            <button id="export-btn" class="btn">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                Export CSV
+            </button>
+        </div>
         <div class="toolbar">
             <input id="stats-search" placeholder="Search well..."/>
             <span class="muted" id="stats-count"></span>
@@ -207,6 +294,7 @@ ${plotly_loader_tag}
         <div class="table-wrap">
             <table id="stats-table"></table>
         </div>
+        <div id="pagination" class="pagination"></div>
     </section>
 
     <section class="panel">
@@ -233,7 +321,6 @@ ${plotly_loader_tag}
     const readDist = parseJson('${rna_read_distribution_bar_data}', {});
     const satX = parseJson('${rna_saturation_fraction}', []);
     const satLib = parseJson('${rna_saturation_lib_pct}', []);
-    const satGene = parseJson('${rna_saturation_gene_pct}', []);
     const medUmi = parseJson('${rna_saturation_median_genes_umi}', []);
     const geneBodyX = parseJson('${rna_gene_body_percentile}', []);
     const geneBodyUmi = parseJson('${rna_gene_body_umi_maxnorm}', []);
@@ -282,26 +369,54 @@ ${plotly_loader_tag}
             div.className = 'card';
             div.innerHTML = '<div class="card-value"></div><div class="card-label"></div>';
             div.children[0].textContent = card.value || '';
-            div.children[1].textContent = card.label || '';
+            const isBarcodeMode = String(card.label || '').toLowerCase() === 'barcode mode';
+            div.children[1].textContent = isBarcodeMode ? '' : (card.label || '');
             target.appendChild(div);
         });
     }
-    function renderPlateSummary() {
-        const body = el('plate-summary-body');
-        body.innerHTML = '';
-        plateSummary.forEach(function(row) {
-            const tr = document.createElement('tr');
-            const vals = [row.plate, fmtInt(row.expected_wells), fmtInt(row.active_wells), fmtPct(row.active_fraction), fmtInt(row.median_reads), fmtInt(row.median_genes), fmtInt(row.median_umis)];
-            vals.forEach(function(v, i) {
-                const td = document.createElement('td');
-                if (i > 0) td.className = 'numeric';
-                td.textContent = v;
-                tr.appendChild(td);
-            });
-            body.appendChild(tr);
+
+    function renderPlateOverview() {
+        const body = el('plate-overview-body');
+        if (!body) return;
+        if (!plateSummary.length) {
+            body.innerHTML = '<tr><td colspan="9" class="muted">No plate summary data</td></tr>';
+            return;
+        }
+        const rowsByPlate = {};
+        parsedWells().forEach(function(w) {
+            if (!rowsByPlate[w.plate]) rowsByPlate[w.plate] = [];
+            rowsByPlate[w.plate].push(w.raw);
         });
-        if (!plateSummary.length) body.innerHTML = '<tr><td colspan="7">No plate summary available.</td></tr>';
+        function medianOfPlate(plate, metric) {
+            const vals = (rowsByPlate[plate] || []).map(function(row) { return metricValue(row, metric); }).filter(function(v) { return v !== null; });
+            return median(vals);
+        }
+        function medianInExAll(plate) {
+            const vals = (rowsByPlate[plate] || []).map(function(row) {
+                const ex = num(row.Exon_reads) || 0;
+                const intr = num(row.intron_reads) ?? num(row.Intron_reads) ?? 0;
+                const all = metricValue(row, 'allreads');
+                if (!all || all <= 0) return null;
+                return (ex + intr) / all;
+            }).filter(function(v) { return v !== null; });
+            return median(vals);
+        }
+        body.innerHTML = plateSummary.map(function(row) {
+            const plate = String(row.plate || '');
+            return '<tr>' +
+                '<td>' + plate + '</td>' +
+                '<td class="numeric">' + fmtInt(row.expected_wells) + '</td>' +
+                '<td class="numeric">' + fmtInt(row.active_wells) + '</td>' +
+                '<td class="numeric">' + fmtInt(row.median_reads) + '</td>' +
+                '<td class="numeric">' + fmtInt(row.median_genes) + '</td>' +
+                '<td class="numeric">' + fmtInt(row.median_umis) + '</td>' +
+                '<td class="numeric">' + fmtPct(medianOfPlate(plate, 'mappingratio')) + '</td>' +
+                '<td class="numeric">' + fmtPct(medianOfPlate(plate, 'umifrac')) + '</td>' +
+                '<td class="numeric">' + fmtPct(medianInExAll(plate)) + '</td>' +
+                '</tr>';
+        }).join('');
     }
+
     function parsedWells() {
         return stats.map(function(row) {
             const well = String(row.wellID || '');
@@ -338,7 +453,7 @@ ${plotly_loader_tag}
                 y: rows.map(function(w) { return w.row; }),
                 text: rows.map(function(w) { return w.well; }),
                 marker: {
-                    size: 22,
+                    size: 26,
                     color: rows.map(function(w) { return metricValue(w.raw, metric); }),
                     colorscale: 'Viridis',
                     showscale: true,
@@ -348,7 +463,7 @@ ${plotly_loader_tag}
             };
             const layout = {
                 title: 'Plate ' + plate + ' - ' + metric,
-                height: 500,
+                height: 520,
                 margin: { l: 42, r: 38, t: 38, b: 40 },
                 xaxis: { title: 'Column', dtick: 1, tick0: 1, range: [0.5, 24.5], fixedrange: true },
                 yaxis: { title: 'Row', categoryorder: 'array', categoryarray: yOrder, fixedrange: true },
@@ -368,30 +483,67 @@ ${plotly_loader_tag}
         const values = order.map(function(k) { return Number(readDist.values[k]) || 0; });
         const colors = order.map(function(k) { return (readDist.colors || {})[k] || '#94a3b8'; });
         Plotly.newPlot(plot, [{ type: 'bar', x: order, y: values, marker: { color: colors } }], {
-            height: 280,
+            height: 380,
             margin: { l: 44, r: 12, t: 12, b: 58 },
-            yaxis: { title: '% reads', range: [0, Math.max(100, Math.max.apply(null, values) * 1.15)] },
+            yaxis: { title: '% reads', rangemode: 'tozero', zeroline: false },
             plot_bgcolor: 'rgba(0,0,0,0)',
             paper_bgcolor: 'rgba(0,0,0,0)'
         }, { responsive: true, displayModeBar: false });
     }
-    function renderHistogram() {
-        const plot = el('metric-histogram');
-        if (!window.Plotly) return;
+    function renderMetricScatter() {
+        const plot = el('metric-scatter');
+        if (!window.Plotly || !stats.length) {
+            plot.innerHTML = '<div class="empty">No data</div>';
+            return;
+        }
+        function metricLabel(metric) {
+            if (metric === 'mappingratio') return 'MappingRatio';
+            if (metric === 'exonintronratio') return 'ExonIntronRatio';
+            if (metric === 'umifrac') return 'UMIfrac';
+            if (metric === 'umis') return 'UMIs';
+            if (metric === 'genes') return 'Genes';
+            return metric;
+        }
         function draw() {
-            const metric = el('hist-metric').value;
-            const vals = stats.map(function(row) { return metricValue(row, metric); }).filter(function(v) { return v !== null; });
-            if (!vals.length) { plot.innerHTML = '<div class="empty">No data</div>'; return; }
-            Plotly.react(plot, [{ type: 'histogram', x: vals, marker: { color: '#2563eb' } }], {
-                height: 280,
-                margin: { l: 44, r: 12, t: 12, b: 42 },
-                xaxis: { title: metric },
-                yaxis: { title: 'Wells' },
+            const metric = (el('metric-y') && el('metric-y').value) || 'mappingratio';
+            const logX = !!(el('metric-logx') && el('metric-logx').checked);
+            const pts = stats.map(function(row) {
+                const x = metricValue(row, 'allreads');
+                const yRaw = metricValue(row, metric);
+                if (x === null || yRaw === null) return null;
+                const y = (metric === 'mappingratio' || metric === 'umifrac') ? yRaw * 100 : yRaw;
+                return { x: x, y: y, well: String(row.wellID || ''), c: y };
+            }).filter(Boolean);
+            if (!pts.length) {
+                plot.innerHTML = '<div class="empty">No data</div>';
+                return;
+            }
+            Plotly.react(plot, [{
+                type: 'scatter',
+                mode: 'markers',
+                x: pts.map(function(p) { return p.x; }),
+                y: pts.map(function(p) { return p.y; }),
+                text: pts.map(function(p) { return p.well; }),
+                marker: {
+                    size: 8,
+                    opacity: 0.85,
+                    color: pts.map(function(p) { return p.c; }),
+                    colorscale: 'Viridis',
+                    showscale: false
+                },
+                hovertemplate: '<b>%{text}</b><br>All reads=%{x}<br>' + metricLabel(metric) + '=%{y}<extra></extra>'
+            }], {
+                height: 360,
+                margin: { l: 56, r: 12, t: 12, b: 54 },
+                title: { text: 'Point Density Plot: ' + metricLabel(metric), x: 0.01, xanchor: 'left', y: 0.98, yanchor: 'top' },
+                xaxis: { title: 'All reads', type: logX ? 'log' : 'linear', zeroline: false },
+                yaxis: { title: (metric === 'mappingratio' || metric === 'umifrac') ? metricLabel(metric) + ' (%)' : metricLabel(metric), zeroline: false },
                 plot_bgcolor: 'rgba(0,0,0,0)',
                 paper_bgcolor: 'rgba(0,0,0,0)'
             }, { responsive: true, displayModeBar: false });
         }
-        el('hist-metric').addEventListener('change', draw);
+        if (el('metric-y')) el('metric-y').addEventListener('change', draw);
+        if (el('metric-logx')) el('metric-logx').addEventListener('change', draw);
         draw();
     }
     function median(values) {
@@ -443,59 +595,61 @@ ${plotly_loader_tag}
 
         const plot = el('umi-read-comparison');
         if (!window.Plotly) return;
+        const dist = {
+            umi_genes: stats.map(function(row) { return metricValue(row, 'genes'); }).filter(function(v) { return v !== null; }),
+            umi_umis: stats.map(function(row) { return metricValue(row, 'umis'); }).filter(function(v) { return v !== null; }),
+            read_genes: stats.map(function(row) { return num(row.Intron_Exon_read_genes) ?? num(row.Exon_read_genes); }).filter(function(v) { return v !== null; }),
+            all_reads: stats.map(function(row) { return metricValue(row, 'allreads'); }).filter(function(v) { return v !== null; })
+        };
         Plotly.newPlot(plot, [
-            {
-                type: 'bar',
-                name: 'UMI-based genes',
-                x: stats.map(function(row) { return row.wellID || ''; }),
-                y: stats.map(function(row) { return metricValue(row, 'genes') || 0; }),
-                marker: { color: '#1f9d66' },
-                yaxis: 'y'
-            },
-            {
-                type: 'bar',
-                name: 'Read-based genes',
-                x: stats.map(function(row) { return row.wellID || ''; }),
-                y: stats.map(function(row) { return num(row.Intron_Exon_read_genes) ?? num(row.Exon_read_genes) ?? 0; }),
-                marker: { color: '#2563eb' },
-                yaxis: 'y'
-            },
-            {
-                type: 'scatter',
-                mode: 'lines+markers',
-                name: 'All reads',
-                x: stats.map(function(row) { return row.wellID || ''; }),
-                y: stats.map(function(row) { return metricValue(row, 'allreads') || 0; }),
-                line: { color: '#ea7a20' },
-                yaxis: 'y2'
-            }
+            { type: 'box', name: 'UMI genes', y: dist.umi_genes, marker: { color: '#1f9d66' }, boxpoints: 'outliers' },
+            { type: 'box', name: 'UMIs', y: dist.umi_umis, marker: { color: '#2563eb' }, boxpoints: 'outliers' },
+            { type: 'box', name: 'Read genes', y: dist.read_genes, marker: { color: '#0f766e' }, boxpoints: 'outliers' },
+            { type: 'box', name: 'All reads', y: dist.all_reads, marker: { color: '#ea7a20' }, boxpoints: 'outliers', yaxis: 'y2' }
         ], {
-            barmode: 'group',
-            height: 240,
-            margin: { l: 52, r: 56, t: 12, b: 54 },
-            xaxis: { title: 'Well', showticklabels: stats.length <= 48 },
-            yaxis: { title: 'Genes' },
-            yaxis2: { title: 'Reads', overlaying: 'y', side: 'right', rangemode: 'tozero' },
-            legend: { orientation: 'h', x: .5, y: -0.2, xanchor: 'center' },
+            boxmode: 'group',
+            height: 340,
+            margin: { l: 54, r: 54, t: 12, b: 54 },
+            yaxis: { title: 'Genes / UMIs', zeroline: false },
+            yaxis2: { title: 'Reads', overlaying: 'y', side: 'right', zeroline: false },
+            legend: { orientation: 'h', x: .98, y: .98, xanchor: 'right', yanchor: 'top', bgcolor: 'rgba(255,255,255,0.75)' },
             plot_bgcolor: 'rgba(0,0,0,0)',
             paper_bgcolor: 'rgba(0,0,0,0)'
         }, { responsive: true, displayModeBar: false });
     }
+    function normalizeSeriesByX(xVals, yVals) {
+        const buckets = {};
+        for (let i = 0; i < Math.min(xVals.length, yVals.length); i++) {
+            const x = num(xVals[i]);
+            const y = num(yVals[i]);
+            if (x === null || y === null) continue;
+            const key = x.toFixed(6);
+            if (!buckets[key]) buckets[key] = [];
+            buckets[key].push(y);
+        }
+        const pairs = Object.keys(buckets).map(function(k) {
+            const ys = buckets[k];
+            const avg = ys.reduce(function(a, b) { return a + b; }, 0) / ys.length;
+            return [Number(k), avg];
+        }).sort(function(a, b) { return a[0] - b[0]; });
+        return { x: pairs.map(function(p) { return p[0]; }), y: pairs.map(function(p) { return p[1]; }) };
+    }
     function renderSaturation() {
         const plot = el('saturation-plot');
         if (!window.Plotly || !satX.length) { plot.innerHTML = '<div class="empty">No saturation data</div>'; return; }
+        const lib = normalizeSeriesByX(satX, satLib);
+        const med = normalizeSeriesByX(satX, medUmi);
         const traces = [
-            { type: 'scatter', mode: 'lines+markers', x: satX, y: satLib, name: 'Library saturation', line: { color: '#1f9d66' } },
-            { type: 'scatter', mode: 'lines+markers', x: satX, y: satGene, name: 'Gene saturation', line: { color: '#ea7a20', dash: 'dash' } }
+            { type: 'scatter', mode: 'lines+markers', x: lib.x, y: lib.y, name: 'Library saturation', line: { color: '#1f9d66' } }
         ];
-        if (medUmi.length === satX.length) traces.push({ type: 'scatter', mode: 'lines+markers', x: satX, y: medUmi, name: 'Median genes', yaxis: 'y2', line: { color: '#2563eb' } });
+        if (med.x.length) traces.push({ type: 'scatter', mode: 'lines+markers', x: med.x, y: med.y, name: 'Median genes', yaxis: 'y2', line: { color: '#2563eb' } });
         Plotly.newPlot(plot, traces, {
-            height: 280,
-            margin: { l: 48, r: 52, t: 12, b: 52 },
-            xaxis: { title: 'Depth fraction' },
-            yaxis: { title: 'Saturation (%)', range: [0, 105] },
-            yaxis2: { title: 'Median genes', overlaying: 'y', side: 'right' },
-            legend: { orientation: 'h', x: .5, y: -0.2, xanchor: 'center' },
+            height: 360,
+            margin: { l: 48, r: 58, t: 12, b: 46 },
+            xaxis: { title: 'Depth fraction', range: [0, 1] },
+            yaxis: { title: 'Saturation (%)', range: [0, 105], zeroline: false },
+            yaxis2: { title: 'Median genes', overlaying: 'y', side: 'right', zeroline: false },
+            legend: { orientation: 'v', x: .98, y: .98, xanchor: 'right', yanchor: 'top', bgcolor: 'rgba(255,255,255,0.75)' },
             plot_bgcolor: 'rgba(0,0,0,0)',
             paper_bgcolor: 'rgba(0,0,0,0)'
         }, { responsive: true, displayModeBar: false });
@@ -507,11 +661,11 @@ ${plotly_loader_tag}
             { type: 'scatter', mode: 'lines', x: geneBodyX, y: geneBodyInt, name: 'Internal', line: { color: '#2563eb' } },
             { type: 'scatter', mode: 'lines', x: geneBodyX, y: geneBodyUmi, name: 'UMI', line: { color: '#dc2626' } }
         ], {
-            height: 280,
-            margin: { l: 48, r: 12, t: 12, b: 52 },
+            height: 360,
+            margin: { l: 48, r: 12, t: 12, b: 46 },
             xaxis: { title: "Gene body percentile (5'->3')" },
-            yaxis: { title: 'Coverage', range: [0, 1.05] },
-            legend: { orientation: 'h', x: .5, y: -0.2, xanchor: 'center' },
+            yaxis: { title: 'Coverage', range: [0, 1.05], zeroline: false },
+            legend: { orientation: 'v', x: .98, y: .98, xanchor: 'right', yanchor: 'top', bgcolor: 'rgba(255,255,255,0.75)' },
             plot_bgcolor: 'rgba(0,0,0,0)',
             paper_bgcolor: 'rgba(0,0,0,0)'
         }, { responsive: true, displayModeBar: false });
@@ -519,31 +673,145 @@ ${plotly_loader_tag}
     function renderStatsTable() {
         const table = el('stats-table');
         const count = el('stats-count');
-        const cols = ['wellID', 'all_reads', 'umi_reads', 'internal_reads', 'MappingRatio', 'UMIfrac', 'Intron_Exon_genes', 'Intron_Exon_umis'];
-        function draw(rows) {
-            count.textContent = rows.length + ' wells';
-            const head = '<thead><tr>' + cols.map(function(c) { return '<th>' + c.replace(/_/g, ' ') + '</th>'; }).join('') + '</tr></thead>';
-            const body = rows.slice(0, 500).map(function(row) {
+        const pagination = el('pagination');
+
+        const cols = ['wellID', 'umi_reads', 'internal_reads', 'MappingRatio', 'InExOverAll', 'UMIfrac', 'Intron_Exon_genes', 'Intron_Exon_umis'];
+        const colNames = {
+            'wellID': 'Well ID',
+            'umi_reads': 'UMI Reads',
+            'internal_reads': 'Internal Reads',
+            'MappingRatio': 'Mapping Ratio',
+            'InExOverAll': 'Exon+Intron / All',
+            'UMIfrac': 'UMI Fraction',
+            'Intron_Exon_genes': 'Intron/Exon Genes',
+            'Intron_Exon_umis': 'Intron/Exon UMIs'
+        };
+
+        const statsWithDerived = stats.map(function(row) {
+            const allReads = metricValue(row, 'allreads');
+            const exon = num(row.Exon_reads) || 0;
+            const intron = num(row.intron_reads) ?? num(row.Intron_reads) ?? 0;
+            const ratio = (allReads && allReads > 0) ? (exon + intron) / allReads : null;
+            return Object.assign({}, row, { InExOverAll: ratio });
+        });
+        let currentRows = [...statsWithDerived];
+        let sortCol = null;
+        let sortAsc = true;
+        let currentPage = 1;
+        let rowsPerPage = 50;
+
+        function draw() {
+            count.textContent = currentRows.length + ' wells';
+
+            let headHtml = '<thead><tr>';
+            cols.forEach(function(c) {
+                let sortClass = sortCol === c ? (sortAsc ? 'asc' : 'desc') : '';
+                headHtml += '<th class="sortable ' + sortClass + '" data-col="' + c + '">' + colNames[c] + '</th>';
+            });
+            headHtml += '</tr></thead>';
+
+            const totalPages = Math.ceil(currentRows.length / rowsPerPage) || 1;
+            if (currentPage > totalPages) currentPage = totalPages;
+
+            const startIdx = (currentPage - 1) * rowsPerPage;
+            const endIdx = startIdx + rowsPerPage;
+            const pageRows = currentRows.slice(startIdx, endIdx);
+
+            let bodyHtml = '<tbody>' + pageRows.map(function(row) {
                 return '<tr>' + cols.map(function(c) {
                     const numeric = c !== 'wellID';
-                    const v = (c === 'MappingRatio' || c === 'UMIfrac') ? fmtPct(row[c]) : (numeric ? fmtInt(row[c]) : String(row[c] || ''));
+                    const v = (c === 'MappingRatio' || c === 'UMIfrac' || c === 'InExOverAll') ? fmtPct(row[c]) : (numeric ? fmtInt(row[c]) : String(row[c] || ''));
                     return '<td class="' + (numeric ? 'numeric' : '') + '">' + v + '</td>';
                 }).join('') + '</tr>';
-            }).join('');
-            table.innerHTML = head + '<tbody>' + body + '</tbody>';
+            }).join('') + '</tbody>';
+
+            table.innerHTML = headHtml + bodyHtml;
+
+            let pgHtml = '';
+            pgHtml += '<button class="page-btn" data-page="prev" ' + (currentPage === 1 ? 'disabled' : '') + '>Prev</button>';
+            pgHtml += '<span class="muted" style="margin: 0 8px;">Page ' + currentPage + ' of ' + totalPages + '</span>';
+            pgHtml += '<button class="page-btn" data-page="next" ' + (currentPage === totalPages ? 'disabled' : '') + '>Next</button>';
+            pgHtml += '<select id="rows-per-page" style="margin-left: 12px; padding: 4px 28px 4px 8px;">';
+            [10, 50, 100, 384].forEach(function(p) {
+                pgHtml += '<option value="' + p + '" ' + (rowsPerPage === p ? 'selected' : '') + '>' + p + ' / page</option>';
+            });
+            pgHtml += '</select>';
+            pagination.innerHTML = pgHtml;
+
+            table.querySelectorAll('th.sortable').forEach(function(th) {
+                th.addEventListener('click', function() {
+                    const c = this.getAttribute('data-col');
+                    if (sortCol === c) {
+                        sortAsc = !sortAsc;
+                    } else {
+                        sortCol = c;
+                        sortAsc = true;
+                    }
+                    sortData();
+                    draw();
+                });
+            });
+
+            if (pagination.querySelector('[data-page="prev"]')) {
+                pagination.querySelector('[data-page="prev"]').addEventListener('click', function() { if (currentPage > 1) { currentPage--; draw(); } });
+                pagination.querySelector('[data-page="next"]').addEventListener('click', function() { if (currentPage < totalPages) { currentPage++; draw(); } });
+                pagination.querySelector('#rows-per-page').addEventListener('change', function(e) {
+                    rowsPerPage = Number(e.target.value);
+                    currentPage = 1;
+                    draw();
+                });
+            }
         }
+
+        function sortData() {
+            if (!sortCol) return;
+            currentRows.sort(function(a, b) {
+                let valA = a[sortCol];
+                let valB = b[sortCol];
+                if (sortCol === 'wellID') {
+                    if (!valA) return sortAsc ? -1 : 1;
+                    if (!valB) return sortAsc ? 1 : -1;
+                    return sortAsc ? String(valA).localeCompare(String(valB)) : String(valB).localeCompare(String(valA));
+                }
+                const nA = num(valA), nB = num(valB);
+                if (nA === null && nB !== null) return 1;
+                if (nB === null && nA !== null) return -1;
+                return sortAsc ? (nA - nB) : (nB - nA);
+            });
+        }
+
         el('stats-search').addEventListener('input', function() {
             const q = String(this.value || '').toLowerCase();
-            draw(stats.filter(function(row) { return String(row.wellID || '').toLowerCase().indexOf(q) >= 0; }));
+            currentRows = statsWithDerived.filter(function(row) { return String(row.wellID || '').toLowerCase().indexOf(q) >= 0; });
+            currentPage = 1;
+            sortData();
+            draw();
         });
-        draw(stats);
+
+        if (el('export-btn')) {
+            el('export-btn').addEventListener('click', function() {
+                const header = cols.map(function(c) { return colNames[c]; }).join(',');
+                const csvRows = currentRows.map(function(row) {
+                    return cols.map(function(c) { return row[c] === null || row[c] === undefined ? '' : row[c]; }).join(',');
+                });
+                const csvData = header + '\n' + csvRows.join('\n');
+                const blob = new Blob([csvData], { type: 'text/csv' });
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.setAttribute('href', url);
+                a.setAttribute('download', 'Per_Well_Statistics.csv');
+                a.click();
+            });
+        }
+
+        draw();
     }
     renderCards();
-    renderPlateSummary();
+    renderPlateOverview();
     renderPlatePlot();
     renderUmiReadComparison();
     renderReadDistribution();
-    renderHistogram();
+    renderMetricScatter();
     renderSaturation();
     renderGeneBody();
     renderStatsTable();

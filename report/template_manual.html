@@ -7,7 +7,8 @@
 ${plotly_loader_tag}
 <style>
     :root {
-        --bg: #f7f8fb;
+        --bg: #f3f6fb;
+        --bg-accent: #eef4ff;
         --panel: #ffffff;
         --text: #172033;
         --muted: #64748b;
@@ -20,12 +21,14 @@ ${plotly_loader_tag}
     * { box-sizing: border-box; }
     body {
         margin: 0;
-        background: var(--bg);
+        background:
+            radial-gradient(1200px 420px at 50% -120px, var(--bg-accent), transparent 60%),
+            var(--bg);
         color: var(--text);
         font-family: Inter, -apple-system, BlinkMacSystemFont, "PingFang SC", "Segoe UI", Arial, sans-serif;
         font-size: 13px;
     }
-    .shell { max-width: 1080px; margin: 0 auto; padding: 18px; }
+    .shell { max-width: 1200px; margin: 0 auto; padding: 18px; }
     .hero {
         background: linear-gradient(135deg, #1e3a8a, #2563eb);
         color: #fff;
@@ -45,29 +48,51 @@ ${plotly_loader_tag}
     .panel {
         background: var(--panel);
         border: 1px solid var(--line);
-        border-radius: 8px;
-        padding: 16px;
+        border-radius: 10px;
+        padding: 18px;
         margin-top: 14px;
-        box-shadow: 0 1px 2px rgba(15, 23, 42, .04);
+        box-shadow: 0 4px 14px rgba(15, 23, 42, .05);
     }
     .card {
         background: var(--panel);
         border: 1px solid var(--line);
-        border-radius: 8px;
+        border-radius: 10px;
         padding: 14px;
+        box-shadow: 0 2px 8px rgba(15, 23, 42, .04);
     }
-    .card-value { font-size: 21px; font-weight: 700; overflow-wrap: anywhere; }
+    .card-value { font-size: 22px; font-weight: 700; overflow-wrap: anywhere; letter-spacing: 0; }
     .card-label { color: var(--muted); margin-top: 5px; font-size: 12px; }
-    h2 { font-size: 17px; margin: 0 0 12px; }
+    h2 {
+        font-size: 17px;
+        margin: 0 0 14px;
+        padding-bottom: 8px;
+        border-bottom: 1px solid #edf2f7;
+    }
     h3 { font-size: 14px; margin: 0 0 10px; color: #263244; }
     .muted { color: var(--muted); }
     .toolbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
     select, input {
         border: 1px solid var(--line);
         border-radius: 6px;
-        padding: 6px 9px;
-        background: #fff;
+        padding: 6px 32px 6px 12px;
+        background: #fff url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="%2364748b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>') no-repeat right 8px center;
+        background-size: 14px;
         color: var(--text);
+        appearance: none;
+        -webkit-appearance: none;
+        font-family: inherit;
+        font-size: 13px;
+        box-shadow: 0 1px 2px rgba(15, 23, 42, .04);
+        transition: border-color 0.15s ease;
+    }
+    input {
+        padding: 6px 12px;
+        background-image: none;
+    }
+    select:focus, input:focus {
+        outline: none;
+        border-color: var(--blue);
+        box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
     }
     table { width: 100%; border-collapse: collapse; background: #fff; }
     th, td { border: 1px solid var(--line); padding: 6px 8px; white-space: nowrap; }
@@ -75,13 +100,21 @@ ${plotly_loader_tag}
     td.numeric { text-align: right; font-weight: 600; }
     .table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; }
     .table-wrap table { border: 0; }
-    .plot { width: 100%; height: 280px; min-height: 240px; }
-    .compact-plot { height: 240px; min-height: 220px; margin-top: 12px; }
-    .wide-plot { height: 360px; min-height: 320px; }
+    .plot {
+        width: 100%;
+        height: 340px;
+        min-height: 300px;
+        border: 1px solid #edf2f7;
+        border-radius: 8px;
+        background: #fcfdff;
+        padding: 6px;
+    }
+    .compact-plot { height: 320px; min-height: 280px; margin-top: 12px; }
+    .wide-plot { height: 420px; min-height: 360px; }
     .empty { color: var(--muted); display: flex; align-items: center; justify-content: center; min-height: 120px; }
     details { margin-top: 16px; }
     summary { cursor: pointer; color: var(--muted); font-weight: 600; }
-    pre { overflow-x: auto; background: #0f172a; color: #e2e8f0; padding: 14px; border-radius: 8px; font-size: 12px; }
+    pre { overflow-x: auto; background: #f8fafc; color: #1e293b; border: 1px solid #e2e8f0; padding: 14px; border-radius: 8px; font-size: 12px; }
     footer { color: var(--muted); text-align: center; padding: 20px 0 8px; }
     @media (max-width: 900px) {
         .shell { padding: 12px; }
@@ -104,8 +137,25 @@ ${plotly_loader_tag}
     <section class="grid cards" id="summary-cards"></section>
 
     <section class="panel">
-        <h2>Manual Sample Comparison</h2>
-        <div id="sample-comparison" class="plot wide-plot"></div>
+        <h2>Sample Overview</h2>
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Samples</th>
+                        <th>Expected samples</th>
+                        <th>Active samples</th>
+                        <th>Median reads</th>
+                        <th>Median genes</th>
+                        <th>Median UMIs</th>
+                        <th>Median mapping</th>
+                        <th>Median UMI fraction</th>
+                        <th>Median Exon+Intron / All</th>
+                    </tr>
+                </thead>
+                <tbody id="sample-overview-body"></tbody>
+            </table>
+        </div>
     </section>
 
     <section class="panel">
@@ -128,7 +178,6 @@ ${plotly_loader_tag}
                 </div>
             </div>
         </div>
-        <div id="umi-read-comparison" class="plot compact-plot"></div>
     </section>
 
     <section class="panel">
@@ -138,14 +187,12 @@ ${plotly_loader_tag}
                 <thead>
                     <tr>
                         <th>Sample</th>
-                        <th>All reads</th>
                         <th>UMI reads</th>
                         <th>Internal reads</th>
                         <th>Genes</th>
                         <th>UMIs</th>
                         <th>Mapping ratio</th>
-                        <th>UMI barcode</th>
-                        <th>Internal barcode</th>
+                        <th>Exon+Intron / All</th>
                     </tr>
                 </thead>
                 <tbody id="manual-detail-body"></tbody>
@@ -159,18 +206,20 @@ ${plotly_loader_tag}
             <div id="read-distribution" class="plot"></div>
         </div>
         <div class="panel">
-            <h2>Sample Metric Distribution</h2>
+            <h2>Per-Well QC Distribution</h2>
             <div class="toolbar">
+                <label><input type="checkbox" id="metric-logx" checked/> Log Scale</label>
                 <label>Metric
-                    <select id="metric-select">
-                        <option value="all_reads">All reads</option>
-                        <option value="genes">Genes</option>
+                    <select id="metric-y">
+                        <option value="mappingratio">MappingRatio</option>
+                        <option value="exonintronratio">ExonIntronRatio</option>
+                        <option value="umifrac">UMIfrac</option>
                         <option value="umis">UMIs</option>
-                        <option value="mapping_ratio">Mapping ratio</option>
+                        <option value="genes">Genes</option>
                     </select>
                 </label>
             </div>
-            <div id="metric-barplot" class="plot"></div>
+            <div id="metric-scatter" class="plot"></div>
         </div>
     </section>
 
@@ -220,7 +269,6 @@ ${plotly_loader_tag}
     const readDist = parseJson('${rna_read_distribution_bar_data}', {});
     const satX = parseJson('${rna_saturation_fraction}', []);
     const satLib = parseJson('${rna_saturation_lib_pct}', []);
-    const satGene = parseJson('${rna_saturation_gene_pct}', []);
     const medUmi = parseJson('${rna_saturation_median_genes_umi}', []);
     const geneBodyX = parseJson('${rna_gene_body_percentile}', []);
     const geneBodyUmi = parseJson('${rna_gene_body_umi_maxnorm}', []);
@@ -249,6 +297,18 @@ ${plotly_loader_tag}
         const n = num(v);
         return n === null ? '' : (n * 100).toFixed(1) + '%';
     }
+    function metricValue(row, metric) {
+        const internal = num(row.internal_reads) || 0;
+        const umiReads = num(row.umi_reads) || 0;
+        const allReads = num(row.all_reads);
+        if (metric === 'allreads') return allReads !== null ? allReads : internal + umiReads;
+        if (metric === 'genes') return num(row.Intron_Exon_genes) ?? num(row.Exon_genes);
+        if (metric === 'umis') return num(row.Intron_Exon_umis) ?? num(row.Exon_umis);
+        if (metric === 'mappingratio') return num(row.MappingRatio);
+        if (metric === 'umifrac') return num(row.UMIfrac);
+        if (metric === 'exonintronratio') return num(row.ExonIntronRatio);
+        return null;
+    }
     function renderCards() {
         const target = el('summary-cards');
         target.innerHTML = '';
@@ -261,21 +321,55 @@ ${plotly_loader_tag}
             target.appendChild(div);
         });
     }
+    function renderSampleOverview() {
+        const body = el('sample-overview-body');
+        if (!body) return;
+        if (!manualRows.length) {
+            body.innerHTML = '<tr><td colspan="9" class="muted">No sample summary data</td></tr>';
+            return;
+        }
+        const allReads = manualRows.map(function(r) { return num(r.all_reads); }).filter(function(v) { return v !== null; });
+        const genes = manualRows.map(function(r) { return num(r.genes); }).filter(function(v) { return v !== null; });
+        const umis = manualRows.map(function(r) { return num(r.umis); }).filter(function(v) { return v !== null; });
+        const mapping = manualRows.map(function(r) { return num(r.mapping_ratio); }).filter(function(v) { return v !== null; });
+        const umiFrac = manualRows.map(function(r) { return num(r.UMIfrac) ?? num(r.umi_fraction); }).filter(function(v) { return v !== null; });
+        const inexAll = stats.map(function(row) {
+            const ex = num(row.Exon_reads) || 0;
+            const intr = num(row.intron_reads) ?? num(row.Intron_reads) ?? 0;
+            const all = metricValue(row, 'allreads');
+            if (!all || all <= 0) return null;
+            return (ex + intr) / all;
+        }).filter(function(v) { return v !== null; });
+        const active = manualRows.filter(function(r) { return (num(r.all_reads) || 0) > 0; }).length;
+        body.innerHTML = '<tr>' +
+            '<td>Manual samples</td>' +
+            '<td class="numeric">' + fmtInt(manualRows.length) + '</td>' +
+            '<td class="numeric">' + fmtInt(active) + '</td>' +
+            '<td class="numeric">' + fmtInt(median(allReads)) + '</td>' +
+            '<td class="numeric">' + fmtInt(median(genes)) + '</td>' +
+            '<td class="numeric">' + fmtInt(median(umis)) + '</td>' +
+            '<td class="numeric">' + fmtPct(median(mapping)) + '</td>' +
+            '<td class="numeric">' + fmtPct(median(umiFrac)) + '</td>' +
+            '<td class="numeric">' + fmtPct(median(inexAll)) + '</td>' +
+            '</tr>';
+    }
     function renderManualDetails() {
         const body = el('manual-detail-body');
         body.innerHTML = '';
         manualRows.forEach(function(row) {
             const tr = document.createElement('tr');
+            const allReads = num(row.all_reads);
+            const exon = num(row.Exon_reads) || 0;
+            const intron = num(row.intron_reads) ?? num(row.Intron_reads) ?? 0;
+            const inExAll = (allReads && allReads > 0) ? (exon + intron) / allReads : null;
             const vals = [
                 row.wellID,
-                fmtInt(row.all_reads),
                 fmtInt(row.umi_reads),
                 fmtInt(row.internal_reads),
                 fmtInt(row.genes),
                 fmtInt(row.umis),
                 fmtPct(row.mapping_ratio),
-                row.umi_barcodes || '',
-                row.internal_barcodes || ''
+                fmtPct(inExAll),
             ];
             vals.forEach(function(v, i) {
                 const td = document.createElement('td');
@@ -285,28 +379,7 @@ ${plotly_loader_tag}
             });
             body.appendChild(tr);
         });
-        if (!manualRows.length) body.innerHTML = '<tr><td colspan="9">No manual sample summary available.</td></tr>';
-    }
-    function renderSampleComparison() {
-        const plot = el('sample-comparison');
-        if (!window.Plotly || !manualRows.length) { plot.innerHTML = '<div class="empty">No manual sample data</div>'; return; }
-        const labels = manualRows.map(function(r) { return String(r.wellID || ''); });
-        const traces = [
-            { type: 'bar', x: labels, y: manualRows.map(function(r) { return num(r.all_reads) || 0; }), name: 'All reads', marker: { color: '#2563eb' }, yaxis: 'y' },
-            { type: 'bar', x: labels, y: manualRows.map(function(r) { return num(r.umi_reads) || 0; }), name: 'UMI reads', marker: { color: '#1f9d66' }, yaxis: 'y' },
-            { type: 'scatter', mode: 'lines+markers', x: labels, y: manualRows.map(function(r) { return num(r.genes) || 0; }), name: 'Genes', line: { color: '#ea7a20' }, yaxis: 'y2' }
-        ];
-        Plotly.newPlot(plot, traces, {
-            barmode: 'group',
-            height: 360,
-            margin: { l: 52, r: 56, t: 12, b: labels.length > 8 ? 78 : 52 },
-            xaxis: { title: 'Manual sample', tickangle: labels.length > 8 ? -45 : 0 },
-            yaxis: { title: 'Reads', rangemode: 'tozero' },
-            yaxis2: { title: 'Genes', overlaying: 'y', side: 'right', rangemode: 'tozero' },
-            legend: { orientation: 'h', x: .5, y: -0.2, xanchor: 'center' },
-            plot_bgcolor: 'rgba(0,0,0,0)',
-            paper_bgcolor: 'rgba(0,0,0,0)'
-        }, { responsive: true, displayModeBar: false });
+        if (!manualRows.length) body.innerHTML = '<tr><td colspan="7">No manual sample summary available.</td></tr>';
     }
     function renderReadDistribution() {
         const plot = el('read-distribution');
@@ -315,31 +388,61 @@ ${plotly_loader_tag}
         const values = order.map(function(k) { return Number(readDist.values[k]) || 0; });
         const colors = order.map(function(k) { return (readDist.colors || {})[k] || '#94a3b8'; });
         Plotly.newPlot(plot, [{ type: 'bar', x: order, y: values, marker: { color: colors } }], {
-            height: 280,
+            height: 380,
             margin: { l: 44, r: 12, t: 12, b: 58 },
-            yaxis: { title: '% reads', range: [0, Math.max(100, Math.max.apply(null, values) * 1.15)] },
+            yaxis: { title: '% reads', rangemode: 'tozero', zeroline: false },
             plot_bgcolor: 'rgba(0,0,0,0)',
             paper_bgcolor: 'rgba(0,0,0,0)'
         }, { responsive: true, displayModeBar: false });
     }
-    function renderMetricBarplot() {
-        const plot = el('metric-barplot');
-        if (!window.Plotly) return;
+    function renderMetricScatter() {
+        const plot = el('metric-scatter');
+        if (!window.Plotly || !stats.length) {
+            plot.innerHTML = '<div class="empty">No data</div>';
+            return;
+        }
+        function metricLabel(metric) {
+            if (metric === 'mappingratio') return 'MappingRatio';
+            if (metric === 'exonintronratio') return 'ExonIntronRatio';
+            if (metric === 'umifrac') return 'UMIfrac';
+            if (metric === 'umis') return 'UMIs';
+            if (metric === 'genes') return 'Genes';
+            return metric;
+        }
         function draw() {
-            const metric = el('metric-select').value;
-            const labels = manualRows.map(function(r) { return String(r.wellID || ''); });
-            const vals = manualRows.map(function(r) { return num(r[metric]) || 0; });
-            if (!labels.length) { plot.innerHTML = '<div class="empty">No data</div>'; return; }
-            Plotly.react(plot, [{ type: 'bar', x: labels, y: vals, marker: { color: '#2563eb' } }], {
-                height: 280,
-                margin: { l: 48, r: 12, t: 12, b: labels.length > 8 ? 78 : 50 },
-                xaxis: { title: 'Manual sample', tickangle: labels.length > 8 ? -45 : 0 },
-                yaxis: { title: metric },
+            const metric = (el('metric-y') && el('metric-y').value) || 'mappingratio';
+            const logX = !!(el('metric-logx') && el('metric-logx').checked);
+            const pts = stats.map(function(row) {
+                const x = metricValue(row, 'allreads');
+                const yRaw = metricValue(row, metric);
+                if (x === null || yRaw === null) return null;
+                const y = (metric === 'mappingratio' || metric === 'umifrac') ? yRaw * 100 : yRaw;
+                return { x: x, y: y, well: String(row.wellID || ''), c: y };
+            }).filter(Boolean);
+            if (!pts.length) {
+                plot.innerHTML = '<div class="empty">No data</div>';
+                return;
+            }
+            Plotly.react(plot, [{
+                type: 'scatter',
+                mode: 'markers',
+                x: pts.map(function(p) { return p.x; }),
+                y: pts.map(function(p) { return p.y; }),
+                text: pts.map(function(p) { return p.well; }),
+                marker: { size: 8, opacity: 0.85, color: pts.map(function(p) { return p.c; }), colorscale: 'Viridis', showscale: false },
+                hovertemplate: '<b>%{text}</b><br>All reads=%{x}<br>' + metricLabel(metric) + '=%{y}<extra></extra>'
+            }], {
+                height: 360,
+                margin: { l: 56, r: 12, t: 12, b: 54 },
+                title: { text: 'Point Density Plot: ' + metricLabel(metric), x: 0.01, xanchor: 'left', y: 0.98, yanchor: 'top' },
+                xaxis: { title: 'All reads', type: logX ? 'log' : 'linear', zeroline: false },
+                yaxis: { title: (metric === 'mappingratio' || metric === 'umifrac') ? metricLabel(metric) + ' (%)' : metricLabel(metric), zeroline: false },
                 plot_bgcolor: 'rgba(0,0,0,0)',
                 paper_bgcolor: 'rgba(0,0,0,0)'
             }, { responsive: true, displayModeBar: false });
         }
-        el('metric-select').addEventListener('change', draw);
+        if (el('metric-y')) el('metric-y').addEventListener('change', draw);
+        if (el('metric-logx')) el('metric-logx').addEventListener('change', draw);
         draw();
     }
     function median(values) {
@@ -359,12 +462,7 @@ ${plotly_loader_tag}
         const total = vals.reduce(function(a, b) { return a + b; }, 0);
         return { total: total, median: median(vals) };
     }
-    function renderUmiReadComparison() {
-        const labels = stats.map(function(row) { return row.wellID || ''; });
-        const umiGenes = stats.map(function(row) { return num(row.Intron_Exon_genes) ?? num(row.Exon_genes) ?? 0; });
-        const readGenes = stats.map(function(row) { return num(row.Intron_Exon_read_genes) ?? num(row.Exon_read_genes) ?? 0; });
-        const umiCounts = stats.map(function(row) { return num(row.Intron_Exon_umis) ?? num(row.Exon_umis) ?? 0; });
-        const readCounts = stats.map(function(row) { return num(row.all_reads) || 0; });
+    function renderUmiReadSummary() {
         const umiSummary = {
             genes: summarizeMetric(['Intron_Exon_genes', 'Exon_genes']),
             molecules: summarizeMetric(['Intron_Exon_umis', 'Exon_umis']),
@@ -391,41 +489,40 @@ ${plotly_loader_tag}
             ['Exon reads', fmtInt(readSummary.exon.total)],
             ['Intron reads', fmtInt(readSummary.intron.total)]
         ].map(function(r) { return '<tr><th>' + r[0] + '</th><td class="numeric">' + r[1] + '</td></tr>'; }).join('');
-
-        const plot = el('umi-read-comparison');
-        if (!window.Plotly || !labels.length) { plot.innerHTML = '<div class="empty">No UMI/read comparison data</div>'; return; }
-        Plotly.newPlot(plot, [
-            { type: 'bar', name: 'UMI-based genes', x: labels, y: umiGenes, marker: { color: '#1f9d66' }, yaxis: 'y' },
-            { type: 'bar', name: 'Read-based genes', x: labels, y: readGenes, marker: { color: '#2563eb' }, yaxis: 'y' },
-            { type: 'scatter', mode: 'lines+markers', name: 'UMIs', x: labels, y: umiCounts, line: { color: '#dc2626' }, yaxis: 'y2' },
-            { type: 'scatter', mode: 'lines+markers', name: 'Reads', x: labels, y: readCounts, line: { color: '#ea7a20', dash: 'dash' }, yaxis: 'y2' }
-        ], {
-            barmode: 'group',
-            height: 240,
-            margin: { l: 52, r: 58, t: 12, b: labels.length > 8 ? 78 : 52 },
-            xaxis: { title: 'Manual sample', tickangle: labels.length > 8 ? -45 : 0 },
-            yaxis: { title: 'Genes' },
-            yaxis2: { title: 'Molecules / reads', overlaying: 'y', side: 'right', rangemode: 'tozero' },
-            legend: { orientation: 'h', x: .5, y: -0.25, xanchor: 'center' },
-            plot_bgcolor: 'rgba(0,0,0,0)',
-            paper_bgcolor: 'rgba(0,0,0,0)'
-        }, { responsive: true, displayModeBar: false });
     }
     function renderSaturation() {
         const plot = el('saturation-plot');
         if (!window.Plotly || !satX.length) { plot.innerHTML = '<div class="empty">No saturation data</div>'; return; }
+        function normalizeSeriesByX(xVals, yVals) {
+            const buckets = {};
+            for (let i = 0; i < Math.min(xVals.length, yVals.length); i++) {
+                const x = num(xVals[i]);
+                const y = num(yVals[i]);
+                if (x === null || y === null) continue;
+                const key = x.toFixed(6);
+                if (!buckets[key]) buckets[key] = [];
+                buckets[key].push(y);
+            }
+            const pairs = Object.keys(buckets).map(function(k) {
+                const ys = buckets[k];
+                const avg = ys.reduce(function(a, b) { return a + b; }, 0) / ys.length;
+                return [Number(k), avg];
+            }).sort(function(a, b) { return a[0] - b[0]; });
+            return { x: pairs.map(function(p) { return p[0]; }), y: pairs.map(function(p) { return p[1]; }) };
+        }
+        const lib = normalizeSeriesByX(satX, satLib);
+        const med = normalizeSeriesByX(satX, medUmi);
         const traces = [
-            { type: 'scatter', mode: 'lines+markers', x: satX, y: satLib, name: 'Library saturation', line: { color: '#1f9d66' } },
-            { type: 'scatter', mode: 'lines+markers', x: satX, y: satGene, name: 'Gene saturation', line: { color: '#ea7a20', dash: 'dash' } }
+            { type: 'scatter', mode: 'lines+markers', x: lib.x, y: lib.y, name: 'Library saturation', line: { color: '#1f9d66' } }
         ];
-        if (medUmi.length === satX.length) traces.push({ type: 'scatter', mode: 'lines+markers', x: satX, y: medUmi, name: 'Median genes', yaxis: 'y2', line: { color: '#2563eb' } });
+        if (med.x.length) traces.push({ type: 'scatter', mode: 'lines+markers', x: med.x, y: med.y, name: 'Median genes', yaxis: 'y2', line: { color: '#2563eb' } });
         Plotly.newPlot(plot, traces, {
-            height: 280,
-            margin: { l: 48, r: 52, t: 12, b: 52 },
-            xaxis: { title: 'Depth fraction' },
-            yaxis: { title: 'Saturation (%)', range: [0, 105] },
-            yaxis2: { title: 'Median genes', overlaying: 'y', side: 'right' },
-            legend: { orientation: 'h', x: .5, y: -0.2, xanchor: 'center' },
+            height: 360,
+            margin: { l: 48, r: 58, t: 12, b: 46 },
+            xaxis: { title: 'Depth fraction', range: [0, 1] },
+            yaxis: { title: 'Saturation (%)', range: [0, 105], zeroline: false },
+            yaxis2: { title: 'Median genes', overlaying: 'y', side: 'right', zeroline: false },
+            legend: { orientation: 'v', x: .98, y: .98, xanchor: 'right', yanchor: 'top', bgcolor: 'rgba(255,255,255,0.75)' },
             plot_bgcolor: 'rgba(0,0,0,0)',
             paper_bgcolor: 'rgba(0,0,0,0)'
         }, { responsive: true, displayModeBar: false });
@@ -437,11 +534,11 @@ ${plotly_loader_tag}
             { type: 'scatter', mode: 'lines', x: geneBodyX, y: geneBodyInt, name: 'Internal', line: { color: '#2563eb' } },
             { type: 'scatter', mode: 'lines', x: geneBodyX, y: geneBodyUmi, name: 'UMI', line: { color: '#dc2626' } }
         ], {
-            height: 280,
-            margin: { l: 48, r: 12, t: 12, b: 52 },
+            height: 360,
+            margin: { l: 48, r: 12, t: 12, b: 46 },
             xaxis: { title: "Gene body percentile (5'->3')" },
-            yaxis: { title: 'Coverage', range: [0, 1.05] },
-            legend: { orientation: 'h', x: .5, y: -0.2, xanchor: 'center' },
+            yaxis: { title: 'Coverage', range: [0, 1.05], zeroline: false },
+            legend: { orientation: 'v', x: .98, y: .98, xanchor: 'right', yanchor: 'top', bgcolor: 'rgba(255,255,255,0.75)' },
             plot_bgcolor: 'rgba(0,0,0,0)',
             paper_bgcolor: 'rgba(0,0,0,0)'
         }, { responsive: true, displayModeBar: false });
@@ -469,11 +566,11 @@ ${plotly_loader_tag}
         draw(stats);
     }
     renderCards();
+    renderSampleOverview();
     renderManualDetails();
-    renderSampleComparison();
-    renderUmiReadComparison();
+    renderUmiReadSummary();
     renderReadDistribution();
-    renderMetricBarplot();
+    renderMetricScatter();
     renderSaturation();
     renderGeneBody();
     renderStatsTable();
