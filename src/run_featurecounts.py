@@ -466,7 +466,8 @@ def run_featurecounts_cmd(
     """
     Runs featureCounts.
     """
-    print(f"Running featureCounts for {feature_type} (Strand: {strand_mode})...")
+    threads = max(1, int(threads))
+    print(f"Running featureCounts for {feature_type} (Strand: {strand_mode}, Threads: {threads})...")
     output_counts = f"{out_prefix}.counts.txt"
 
     cmd = [

@@ -230,13 +230,17 @@ def calculate_saturation(out_dir, project):
         total_umi_reads = np.sum(umi_counts * umi_freqs)
         if total_umi_reads == 0: return np.zeros(len(fractions))
         
-        saturation = []
-        for f in fractions:
-            exp_reads = f * total_umi_reads
-            probs = 1.0 - np.power(1.0 - f, umi_counts)
+        exp_reads = fractions * total_umi_reads
+        if umi_counts.size <= 1_000_000:
+            probs = 1.0 - np.power(1.0 - fractions[:, None], umi_counts[None, :])
+            exp_unique = np.sum(probs * umi_freqs[None, :], axis=1)
+            return 1.0 - (exp_unique / exp_reads)
+
+        saturation = np.empty(len(fractions), dtype=np.float64)
+        for i, frac in enumerate(fractions):
+            probs = 1.0 - np.power(1.0 - frac, umi_counts)
             exp_unique = np.sum(probs * umi_freqs)
-            sat = 1.0 - (exp_unique / exp_reads) if exp_reads > 0 else 0.0
-            saturation.append(sat)
+            saturation[i] = 1.0 - (exp_unique / exp_reads[i])
         return saturation
 
     print(f"Calculating Library Saturation from {sat_json_global}...")
@@ -272,6 +276,22 @@ def calculate_saturation(out_dir, project):
             print(f"Error loading matrix {matrix_dir}: {e}")
             return None, 0
 
+    def calc_median_gene_curve(cell_arrays, fractions):
+        cell_arrays = [np.asarray(counts, dtype=np.float64) for counts in cell_arrays if len(counts)]
+        if not cell_arrays:
+            return [0.0] * len(fractions)
+
+        lengths = np.fromiter((arr.size for arr in cell_arrays), dtype=np.int64)
+        starts = np.concatenate(([0], np.cumsum(lengths)[:-1]))
+        counts = np.concatenate(cell_arrays)
+
+        medians = []
+        for frac in fractions:
+            probs = 1.0 - np.power(1.0 - frac, counts)
+            per_cell = np.add.reduceat(probs, starts)
+            medians.append(float(np.median(per_cell)))
+        return medians
+
     # 2. Median Genes (UMI)
     median_genes_umi = []
     if umi_matrix_dir:
@@ -287,17 +307,7 @@ def calculate_saturation(out_dir, project):
             total_counts = [c.sum() for c in cell_arrays]
             print(f"  - UMI Counts per cell: Mean={np.mean(total_counts):.1f}, Median={np.median(total_counts):.1f}")
             
-            for f in fractions:
-                # E[Genes] for each cell = Sum(1 - (1-f)^count)
-                cell_expectations = []
-                for counts in cell_arrays:
-                    probs = 1.0 - np.power(1.0 - f, counts)
-                    cell_expectations.append(np.sum(probs))
-                
-                if cell_expectations:
-                    median_genes_umi.append(np.median(cell_expectations))
-                else:
-                    median_genes_umi.append(0.0)
+            median_genes_umi = calc_median_gene_curve(cell_arrays, fractions)
 
     # 3. Median Genes (Read)
     median_genes_read = []
@@ -313,16 +323,7 @@ def calculate_saturation(out_dir, project):
             total_counts = [c.sum() for c in cell_arrays]
             print(f"  - Read Counts per cell: Mean={np.mean(total_counts):.1f}, Median={np.median(total_counts):.1f}")
 
-            for f in fractions:
-                cell_expectations = []
-                for counts in cell_arrays:
-                    probs = 1.0 - np.power(1.0 - f, counts)
-                    cell_expectations.append(np.sum(probs))
-                
-                if cell_expectations:
-                    median_genes_read.append(np.median(cell_expectations))
-                else:
-                    median_genes_read.append(0.0)
+            median_genes_read = calc_median_gene_curve(cell_arrays, fractions)
             
     return {
         "fractions": fractions,

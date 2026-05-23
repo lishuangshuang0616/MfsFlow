@@ -56,6 +56,10 @@ DEFAULT_CONFIG = {
         "primaryHit": True,
         "twoPass": False
     },
+    "performance_opts": {
+        "stream_bc_correction": True,
+        "tmp_root": None
+    },
     "make_stats": True,
     "make_h5ad": True,
     "make_sorted_bam": True,

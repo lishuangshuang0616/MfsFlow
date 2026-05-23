@@ -28,6 +28,7 @@ def build_parser():
     parser.add_argument("--sample", required=True, help="Sample name")
     parser.add_argument("--outdir", help="Output directory (default: ./<sample_name>)")
     parser.add_argument("--threads", type=int, default=20, help="Number of threads")
+    parser.add_argument("--tmpRoot", help="Temporary root for chunk BAM/FASTQ files, e.g. /dev/shm")
     parser.add_argument("--stage", choices=STAGE_ORDER, default=FILTERING, help="Analysis stage to start from")
 
     mode_group = parser.add_mutually_exclusive_group(required=True)

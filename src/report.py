@@ -249,6 +249,11 @@ def _process_barcode_report_data(sample_outdir, combined_context, config):
             bucket["umis"].append(umi_val)
 
         expected = expected_by_well.get(well, {})
+        # Calculate UMI fraction and Exon+Intron ratio for manual report
+        umi_fraction = (umi / all_reads) if all_reads and all_reads > 0 else None
+        exon_r = _to_float(row.get("Exon_reads")) or 0.0
+        intron_r = _to_float(row.get("intron_reads")) or _to_float(row.get("Intron_reads")) or 0.0
+        exon_intron_ratio = ((exon_r + intron_r) / all_reads) if all_reads and all_reads > 0 else None
         manual_rows.append({
             "wellID": well,
             "internal_barcodes": expected.get("internal_barcodes") or row.get("internal_barcodes") or "",
@@ -259,6 +264,13 @@ def _process_barcode_report_data(sample_outdir, combined_context, config):
             "genes": int(gene_val) if gene_val is not None else "",
             "umis": int(umi_val) if umi_val is not None else "",
             "mapping_ratio": mapping,
+            "UMIfrac": umi_fraction,
+            "umi_fraction": umi_fraction,
+            "Exon_reads": exon_r,
+            "intron_reads": intron_r,
+            "Intron_reads": intron_r,
+            "ExonIntronRatio": exon_intron_ratio,
+            "exon_intron_ratio": exon_intron_ratio,
         })
 
     if expected_rows:

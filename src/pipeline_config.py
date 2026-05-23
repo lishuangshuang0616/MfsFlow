@@ -13,6 +13,8 @@ def build_base_config(args, script_dir):
     config["num_threads"] = args.threads
     config["toolkit_directory"] = script_dir
     config["which_Stage"] = args.stage
+    if args.tmpRoot:
+        config["performance_opts"]["tmp_root"] = os.path.abspath(args.tmpRoot)
 
     root_out = os.path.abspath(args.outdir) if args.outdir else os.path.join(os.getcwd(), args.sample)
     config["out_dir"] = os.path.join(root_out, "XPRESS_PROCESSING")

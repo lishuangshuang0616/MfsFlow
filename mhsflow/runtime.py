@@ -2,6 +2,7 @@ import os
 import subprocess
 import sys
 import time
+import hashlib
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime
@@ -108,6 +109,8 @@ class PipelineRuntime:
             exec_env["PATH"] = software_dir + os.pathsep + exec_env.get("PATH", "")
 
         out_dir = config["out_dir"]
+        tmp_merge_path = cls._resolve_tmp_merge_path(config, out_dir)
+        os.makedirs(tmp_merge_path, exist_ok=True)
         return cls(
             config=config,
             yaml_file=yaml_file,
@@ -126,8 +129,18 @@ class PipelineRuntime:
             analysis_dir=out_dir,
             log_path=os.path.join(logs_dir(out_dir), "pipeline.log"),
             timing_path=os.path.join(logs_dir(out_dir), "pipeline_timing.tsv"),
-            tmp_merge_path=tmp_merge_dir(out_dir),
+            tmp_merge_path=tmp_merge_path,
         )
+
+    @staticmethod
+    def _resolve_tmp_merge_path(config, out_dir):
+        tmp_root = (config.get("performance_opts", {}) or {}).get("tmp_root")
+        if not tmp_root:
+            return tmp_merge_dir(out_dir)
+        project = str(config.get("project", "sample"))
+        safe_project = "".join(c if c.isalnum() or c in ("-", "_", ".") else "_" for c in project)
+        out_hash = hashlib.sha1(os.path.abspath(out_dir).encode("utf-8")).hexdigest()[:10]
+        return os.path.join(os.path.abspath(tmp_root), f"mhsflow_{safe_project}_{out_hash}", "tmp_merge")
 
     def install_src_path(self):
         toolkit_src_dir = os.path.join(self.toolkit_dir, "src")

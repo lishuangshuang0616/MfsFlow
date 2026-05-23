@@ -7,22 +7,26 @@
 ${plotly_loader_tag}
 <style>
     :root {
-        --bg: #f3f6fb;
-        --bg-accent: #eef4ff;
+        --bg: #f6f8fb;
+        --bg-accent: #e8eef7;
         --panel: #ffffff;
         --text: #172033;
         --muted: #64748b;
         --line: #e2e8f0;
         --green: #1f9d66;
         --blue: #2563eb;
+        --teal: #0f766e;
+        --purple: #7c3aed;
         --orange: #ea7a20;
         --red: #dc2626;
+        --soft-red: #fff7f5;
+        --soft-orange: #fff8ed;
     }
     * { box-sizing: border-box; }
     body {
         margin: 0;
         background:
-            radial-gradient(1200px 420px at 50% -120px, var(--bg-accent), transparent 60%),
+            linear-gradient(180deg, var(--bg-accent) 0, transparent 240px),
             var(--bg);
         color: var(--text);
         font-family: Inter, -apple-system, BlinkMacSystemFont, "PingFang SC", "Segoe UI", Arial, sans-serif;
@@ -30,10 +34,10 @@ ${plotly_loader_tag}
     }
     .shell { max-width: 1200px; margin: 0 auto; padding: 18px; }
     .hero {
-        background: linear-gradient(135deg, #115e45, #1f9d66);
+        background: linear-gradient(135deg, #172033, #263244);
         color: #fff;
         border-radius: 8px;
-        padding: 20px 24px;
+        padding: 18px 22px;
         display: flex;
         justify-content: space-between;
         gap: 18px;
@@ -42,23 +46,37 @@ ${plotly_loader_tag}
     .hero h1 { margin: 0; font-size: 23px; line-height: 1.2; }
     .hero .sub { margin-top: 8px; opacity: .9; }
     .badge { border: 1px solid rgba(255,255,255,.35); padding: 6px 10px; border-radius: 6px; white-space: nowrap; }
+    .mode-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        background: rgba(31, 157, 102, .18);
+        border: 1px solid rgba(31, 157, 102, .48);
+        color: #d1fae5;
+        border-radius: 999px;
+        padding: 5px 9px;
+        font-size: 12px;
+        font-weight: 700;
+        margin-bottom: 8px;
+    }
     .grid { display: grid; gap: 14px; }
-    .cards { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); margin-top: 14px; }
+    .cards { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); margin-top: 14px; }
     .two { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+    .curve-grid { grid-template-columns: repeat(2, minmax(0, 560px)); justify-content: center; }
     .panel {
         background: var(--panel);
         border: 1px solid var(--line);
         border-radius: 10px;
         padding: 18px;
         margin-top: 14px;
-        box-shadow: 0 4px 14px rgba(15, 23, 42, .05);
+        box-shadow: 0 5px 18px rgba(15, 23, 42, .055);
     }
     .card {
         background: var(--panel);
         border: 1px solid var(--line);
         border-radius: 10px;
         padding: 14px;
-        box-shadow: 0 2px 8px rgba(15, 23, 42, .04);
+        box-shadow: 0 3px 12px rgba(15, 23, 42, .045);
     }
     .card-value { font-size: 22px; font-weight: 700; overflow-wrap: anywhere; letter-spacing: 0; }
     .card-label { color: var(--muted); margin-top: 5px; font-size: 12px; }
@@ -134,26 +152,40 @@ ${plotly_loader_tag}
     th.sortable::after { content: '↕'; margin-left: 6px; opacity: 0.3; font-size: 11px; }
     th.sortable.asc::after { content: '↑'; opacity: 1; }
     th.sortable.desc::after { content: '↓'; opacity: 1; }
-    table { width: 100%; border-collapse: collapse; background: #fff; }
+    table { width: 100%; border-collapse: collapse; background: #fff; font-variant-numeric: tabular-nums; }
     th, td { border: 1px solid var(--line); padding: 6px 8px; white-space: nowrap; }
     th { background: #f1f5f9; text-align: left; font-weight: 700; }
     td.numeric { text-align: right; font-weight: 600; }
+    tbody tr:nth-child(even) td { background: #fbfdff; }
+    tbody tr:hover td { background: #eef6ff; }
+    tr.review-row td { background: var(--soft-orange) !important; }
+    tr.warn-row td { background: var(--soft-red) !important; }
     .table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; }
     .plate-overview-table { width: auto; min-width: 860px; }
+    .stats-table-wrap { max-height: 460px; overflow: auto; }
+    .stats-table-wrap th { position: sticky; top: 0; z-index: 3; }
+    .stats-table-wrap th:first-child, .stats-table-wrap td:first-child {
+        position: sticky;
+        left: 0;
+        z-index: 2;
+        background: inherit;
+    }
+    .stats-table-wrap th:first-child { z-index: 4; background: #f1f5f9; }
     .table-wrap table { border: 0; }
     .table-wrap th:first-child, .table-wrap td:first-child { border-left: 0; }
     .table-wrap th:last-child, .table-wrap td:last-child { border-right: 0; }
     .plot {
         width: 100%;
-        height: 340px;
-        min-height: 300px;
-        border: 1px solid #edf2f7;
+        height: 360px;
+        min-height: 320px;
+        border: 1px solid #e8edf5;
         border-radius: 8px;
-        background: #fcfdff;
+        background: #ffffff;
         padding: 6px;
     }
     .compact-plot { height: 320px; min-height: 280px; margin-top: 12px; }
-    .plate-plot { height: 520px; min-height: 460px; }
+    .curve-plot { height: 430px; min-height: 390px; }
+    .plate-plot { height: 500px; min-height: 440px; }
     .empty { color: var(--muted); display: flex; align-items: center; justify-content: center; min-height: 120px; }
     details { margin-top: 16px; }
     summary { cursor: pointer; color: var(--muted); font-weight: 600; }
@@ -164,6 +196,7 @@ ${plotly_loader_tag}
         .hero { display: block; }
         .badge { display: inline-block; margin-top: 12px; }
         .two { grid-template-columns: 1fr; }
+        .curve-grid { grid-template-columns: 1fr; }
     }
 </style>
 </head>
@@ -171,8 +204,9 @@ ${plotly_loader_tag}
 <main class="shell">
     <section class="hero">
         <div>
+            <div class="mode-chip">AUTO 384-WELL</div>
             <h1>${samplename}</h1>
-            <div class="sub">Auto 384-well plate RNA report</div>
+            <div class="sub">RNA library quality control and expression summary</div>
         </div>
         <div class="badge">MhsFlow v${version}</div>
     </section>
@@ -196,7 +230,7 @@ ${plotly_loader_tag}
                         <th>Median UMIs</th>
                         <th>Median mapping</th>
                         <th>Median UMI fraction</th>
-                        <th>Median Exon+Intron / All</th>
+                        <th>Median Exon+Intron ratio</th>
                     </tr>
                 </thead>
                 <tbody id="plate-overview-body"></tbody>
@@ -215,7 +249,7 @@ ${plotly_loader_tag}
                     <option value="umis">UMIs</option>
                     <option value="mappingratio">Mapping ratio</option>
                     <option value="umifrac">UMI fraction</option>
-                    <option value="exonintronratio">Exon/Intron ratio</option>
+                    <option value="exonintronratio">Exon+Intron ratio</option>
                 </select>
             </label>
         </div>
@@ -242,7 +276,10 @@ ${plotly_loader_tag}
                 </div>
             </div>
         </div>
-        <div id="umi-read-comparison" class="plot compact-plot"></div>
+        <div class="grid two" style="margin-top: 12px;">
+            <div id="umi-comparison" class="plot compact-plot"></div>
+            <div id="read-comparison" class="plot compact-plot"></div>
+        </div>
     </section>
 
     <section class="grid two">
@@ -256,9 +293,9 @@ ${plotly_loader_tag}
                 <label><input type="checkbox" id="metric-logx" checked/> Log Scale</label>
                 <label>Metric
                     <select id="metric-y">
-                        <option value="mappingratio">MappingRatio</option>
-                        <option value="exonintronratio">ExonIntronRatio</option>
-                        <option value="umifrac">UMIfrac</option>
+                        <option value="mappingratio">Mapping ratio</option>
+                        <option value="exonintronratio">Exon+Intron ratio</option>
+                        <option value="umifrac">UMI fraction</option>
                         <option value="umis">UMIs</option>
                         <option value="genes">Genes</option>
                     </select>
@@ -268,14 +305,14 @@ ${plotly_loader_tag}
         </div>
     </section>
 
-    <section class="grid two">
+    <section class="grid two curve-grid">
         <div class="panel">
             <h2>Saturation</h2>
-            <div id="saturation-plot" class="plot"></div>
+            <div id="saturation-plot" class="plot curve-plot"></div>
         </div>
         <div class="panel">
             <h2>Gene Body Coverage</h2>
-            <div id="gene-body-plot" class="plot"></div>
+            <div id="gene-body-plot" class="plot curve-plot"></div>
         </div>
     </section>
 
@@ -291,7 +328,7 @@ ${plotly_loader_tag}
             <input id="stats-search" placeholder="Search well..."/>
             <span class="muted" id="stats-count"></span>
         </div>
-        <div class="table-wrap">
+        <div class="table-wrap stats-table-wrap">
             <table id="stats-table"></table>
         </div>
         <div id="pagination" class="pagination"></div>
@@ -349,6 +386,39 @@ ${plotly_loader_tag}
         const n = num(v);
         return n === null ? '' : (n * 100).toFixed(1) + '%';
     }
+    const qcColors = {
+        reads: '#2563eb',
+        umi: '#1f9d66',
+        genes: '#7c3aed',
+        internal: '#0f766e',
+        warn: '#ea7a20',
+        fail: '#dc2626',
+        grid: '#e8edf5'
+    };
+    const qcScale = [
+        [0, '#dbeafe'],
+        [0.25, '#93c5fd'],
+        [0.5, '#2dd4bf'],
+        [0.75, '#1f9d66'],
+        [1, '#14532d']
+    ];
+    function plotLayout(extra) {
+        return Object.assign({
+            font: { family: 'Inter, -apple-system, BlinkMacSystemFont, "PingFang SC", "Segoe UI", Arial, sans-serif', size: 12, color: '#334155' },
+            plot_bgcolor: '#ffffff',
+            paper_bgcolor: '#ffffff',
+            hoverlabel: { bgcolor: '#172033', bordercolor: '#172033', font: { color: '#ffffff' } }
+        }, extra || {});
+    }
+    function rowClass(row, ratio) {
+        const mapping = num(row.MappingRatio);
+        const genes = metricValue(row, 'genes');
+        const reads = metricValue(row, 'allreads');
+        const exInRatio = ratio === undefined ? metricValue(row, 'exonintronratio') : ratio;
+        if ((mapping !== null && mapping < 0.35) || (exInRatio !== null && exInRatio < 0.35)) return 'warn-row';
+        if ((mapping !== null && mapping < 0.55) || (exInRatio !== null && exInRatio < 0.5) || (genes !== null && genes < 500) || (reads !== null && reads < 1000)) return 'review-row';
+        return '';
+    }
     function metricValue(row, metric) {
         const internal = num(row.internal_reads) || 0;
         const umiReads = num(row.umi_reads) || 0;
@@ -360,6 +430,13 @@ ${plotly_loader_tag}
         if (metric === 'umifrac') return num(row.UMIfrac);
         if (metric === 'exonintronratio') return num(row.ExonIntronRatio);
         return null;
+    }
+    function usedReads(row) {
+        const umi = num(row.umi_reads) || 0;
+        const internal = num(row.internal_reads) || 0;
+        const used = umi + internal;
+        if (used > 0) return used;
+        return metricValue(row, 'allreads');
     }
     function renderCards() {
         const target = el('summary-cards');
@@ -395,7 +472,7 @@ ${plotly_loader_tag}
             const vals = (rowsByPlate[plate] || []).map(function(row) {
                 const ex = num(row.Exon_reads) || 0;
                 const intr = num(row.intron_reads) ?? num(row.Intron_reads) ?? 0;
-                const all = metricValue(row, 'allreads');
+                const all = usedReads(row);
                 if (!all || all <= 0) return null;
                 return (ex + intr) / all;
             }).filter(function(v) { return v !== null; });
@@ -422,7 +499,8 @@ ${plotly_loader_tag}
             const well = String(row.wellID || '');
             const m = well.match(/^P(\d+)([A-P])(\d+)$/);
             if (!m) return null;
-            return { plate: m[1], row: m[2], col: Number(m[3]), well: well, raw: row };
+            const rowIndex = m[2].charCodeAt(0) - 'A'.charCodeAt(0) + 1;
+            return { plate: m[1], row: 17 - rowIndex, rowLabel: m[2], col: Number(m[3]), well: well, raw: row };
         }).filter(Boolean);
     }
     function renderPlatePlot() {
@@ -444,32 +522,35 @@ ${plotly_loader_tag}
             const metric = el('plate-metric').value || 'allreads';
             const rows = wells.filter(function(w) { return w.plate === plate; });
             if (!rows.length) { plot.innerHTML = '<div class="empty">No plate data</div>'; return; }
-            const yOrder = [];
-            for (let c = 'P'.charCodeAt(0); c >= 'A'.charCodeAt(0); c--) yOrder.push(String.fromCharCode(c));
+            const yTickVals = [];
+            const yTickText = [];
+            for (let i = 1; i <= 16; i++) {
+                yTickVals.push(i);
+                yTickText.push(String.fromCharCode('P'.charCodeAt(0) - i + 1));
+            }
             const trace = {
                 type: 'scatter',
                 mode: 'markers',
                 x: rows.map(function(w) { return w.col; }),
                 y: rows.map(function(w) { return w.row; }),
                 text: rows.map(function(w) { return w.well; }),
+                customdata: rows.map(function(w) { return w.rowLabel; }),
                 marker: {
-                    size: 26,
+                    size: 18,
                     color: rows.map(function(w) { return metricValue(w.raw, metric); }),
-                    colorscale: 'Viridis',
+                    colorscale: qcScale,
                     showscale: true,
-                    line: { width: 1, color: '#334155' }
+                    line: { width: 0.8, color: '#334155' }
                 },
-                hovertemplate: '<b>%{text}</b><br>Column=%{x}<br>Row=%{y}<br>Value=%{marker.color}<extra></extra>'
+                hovertemplate: '<b>%{text}</b><br>Column=%{x}<br>Row=%{customdata}<br>Value=%{marker.color}<extra></extra>'
             };
-            const layout = {
+            const layout = plotLayout({
                 title: 'Plate ' + plate + ' - ' + metric,
-                height: 520,
+                height: 500,
                 margin: { l: 42, r: 38, t: 38, b: 40 },
-                xaxis: { title: 'Column', dtick: 1, tick0: 1, range: [0.5, 24.5], fixedrange: true },
-                yaxis: { title: 'Row', categoryorder: 'array', categoryarray: yOrder, fixedrange: true },
-                plot_bgcolor: 'rgba(0,0,0,0)',
-                paper_bgcolor: 'rgba(0,0,0,0)'
-            };
+                xaxis: { title: 'Column', dtick: 1, tick0: 1, range: [0.5, 24.5], fixedrange: true, gridcolor: qcColors.grid },
+                yaxis: { title: 'Row', tickmode: 'array', tickvals: yTickVals, ticktext: yTickText, range: [0.5, 16.5], scaleanchor: 'x', scaleratio: 1, fixedrange: true, gridcolor: qcColors.grid }
+            });
             Plotly.react(plot, [trace], layout, { responsive: true, displayModeBar: false });
         }
         plateSelect.addEventListener('change', draw);
@@ -482,13 +563,12 @@ ${plotly_loader_tag}
         const order = readDist.order || [];
         const values = order.map(function(k) { return Number(readDist.values[k]) || 0; });
         const colors = order.map(function(k) { return (readDist.colors || {})[k] || '#94a3b8'; });
-        Plotly.newPlot(plot, [{ type: 'bar', x: order, y: values, marker: { color: colors } }], {
-            height: 380,
-            margin: { l: 44, r: 12, t: 12, b: 58 },
-            yaxis: { title: '% reads', rangemode: 'tozero', zeroline: false },
-            plot_bgcolor: 'rgba(0,0,0,0)',
-            paper_bgcolor: 'rgba(0,0,0,0)'
-        }, { responsive: true, displayModeBar: false });
+        Plotly.newPlot(plot, [{ type: 'bar', x: order, y: values, marker: { color: colors, line: { color: '#ffffff', width: 1 } } }], plotLayout({
+            height: 360,
+            margin: { l: 44, r: 16, t: 12, b: 44 },
+            yaxis: { title: '% reads', rangemode: 'tozero', zeroline: false, gridcolor: qcColors.grid },
+            xaxis: { automargin: true, gridcolor: qcColors.grid }
+        }), { responsive: true, displayModeBar: false });
     }
     function renderMetricScatter() {
         const plot = el('metric-scatter');
@@ -497,9 +577,9 @@ ${plotly_loader_tag}
             return;
         }
         function metricLabel(metric) {
-            if (metric === 'mappingratio') return 'MappingRatio';
-            if (metric === 'exonintronratio') return 'ExonIntronRatio';
-            if (metric === 'umifrac') return 'UMIfrac';
+            if (metric === 'mappingratio') return 'Mapping ratio';
+            if (metric === 'exonintronratio') return 'Exon+Intron ratio';
+            if (metric === 'umifrac') return 'UMI fraction';
             if (metric === 'umis') return 'UMIs';
             if (metric === 'genes') return 'Genes';
             return metric;
@@ -528,19 +608,17 @@ ${plotly_loader_tag}
                     size: 8,
                     opacity: 0.85,
                     color: pts.map(function(p) { return p.c; }),
-                    colorscale: 'Viridis',
+                    colorscale: qcScale,
                     showscale: false
                 },
                 hovertemplate: '<b>%{text}</b><br>All reads=%{x}<br>' + metricLabel(metric) + '=%{y}<extra></extra>'
-            }], {
+            }], plotLayout({
                 height: 360,
-                margin: { l: 56, r: 12, t: 12, b: 54 },
-                title: { text: 'Point Density Plot: ' + metricLabel(metric), x: 0.01, xanchor: 'left', y: 0.98, yanchor: 'top' },
-                xaxis: { title: 'All reads', type: logX ? 'log' : 'linear', zeroline: false },
-                yaxis: { title: (metric === 'mappingratio' || metric === 'umifrac') ? metricLabel(metric) + ' (%)' : metricLabel(metric), zeroline: false },
-                plot_bgcolor: 'rgba(0,0,0,0)',
-                paper_bgcolor: 'rgba(0,0,0,0)'
-            }, { responsive: true, displayModeBar: false });
+                margin: { l: 56, r: 16, t: 12, b: 56 },
+                title: { text: metricLabel(metric) + ' by read depth', x: 0.01, xanchor: 'left', y: 0.98, yanchor: 'top' },
+                xaxis: { title: 'All reads', type: logX ? 'log' : 'linear', zeroline: false, automargin: true, gridcolor: qcColors.grid },
+                yaxis: { title: (metric === 'mappingratio' || metric === 'umifrac') ? metricLabel(metric) + ' (%)' : metricLabel(metric), zeroline: false, automargin: true, gridcolor: qcColors.grid }
+            }), { responsive: true, displayModeBar: false });
         }
         if (el('metric-y')) el('metric-y').addEventListener('change', draw);
         if (el('metric-logx')) el('metric-logx').addEventListener('change', draw);
@@ -593,29 +671,39 @@ ${plotly_loader_tag}
             ['Intron reads', fmtInt(readSummary.intron.total)]
         ].map(function(r) { return '<tr><th>' + r[0] + '</th><td class="numeric">' + r[1] + '</td></tr>'; }).join('');
 
-        const plot = el('umi-read-comparison');
-        if (!window.Plotly) return;
+        const umiPlot = el('umi-comparison');
+        const readPlot = el('read-comparison');
+        if (!window.Plotly || !umiPlot || !readPlot) return;
         const dist = {
             umi_genes: stats.map(function(row) { return metricValue(row, 'genes'); }).filter(function(v) { return v !== null; }),
             umi_umis: stats.map(function(row) { return metricValue(row, 'umis'); }).filter(function(v) { return v !== null; }),
             read_genes: stats.map(function(row) { return num(row.Intron_Exon_read_genes) ?? num(row.Exon_read_genes); }).filter(function(v) { return v !== null; }),
             all_reads: stats.map(function(row) { return metricValue(row, 'allreads'); }).filter(function(v) { return v !== null; })
         };
-        Plotly.newPlot(plot, [
-            { type: 'box', name: 'UMI genes', y: dist.umi_genes, marker: { color: '#1f9d66' }, boxpoints: 'outliers' },
-            { type: 'box', name: 'UMIs', y: dist.umi_umis, marker: { color: '#2563eb' }, boxpoints: 'outliers' },
-            { type: 'box', name: 'Read genes', y: dist.read_genes, marker: { color: '#0f766e' }, boxpoints: 'outliers' },
-            { type: 'box', name: 'All reads', y: dist.all_reads, marker: { color: '#ea7a20' }, boxpoints: 'outliers', yaxis: 'y2' }
-        ], {
+        Plotly.newPlot(umiPlot, [
+            { type: 'box', name: 'UMI genes', y: dist.umi_genes, marker: { color: qcColors.genes, size: 3, opacity: .45 }, line: { color: qcColors.genes }, boxpoints: 'all', jitter: .35, pointpos: 0 },
+            { type: 'box', name: 'UMIs', y: dist.umi_umis, marker: { color: qcColors.umi, size: 3, opacity: .45 }, line: { color: qcColors.umi }, boxpoints: 'all', jitter: .35, pointpos: 0, yaxis: 'y2' }
+        ], plotLayout({
             boxmode: 'group',
             height: 340,
-            margin: { l: 54, r: 54, t: 12, b: 54 },
-            yaxis: { title: 'Genes / UMIs', zeroline: false },
+            margin: { l: 56, r: 56, t: 12, b: 54 },
+            yaxis: { title: 'Genes', zeroline: false, gridcolor: qcColors.grid },
+            yaxis2: { title: 'UMIs', overlaying: 'y', side: 'right', zeroline: false },
+            legend: { orientation: 'h', x: .98, y: .98, xanchor: 'right', yanchor: 'top', bgcolor: 'rgba(255,255,255,0.75)' },
+            title: { text: 'UMI-based', x: 0.01, xanchor: 'left', y: 0.98, yanchor: 'top' }
+        }), { responsive: true, displayModeBar: false });
+        Plotly.newPlot(readPlot, [
+            { type: 'box', name: 'Read genes', y: dist.read_genes, marker: { color: qcColors.genes, size: 3, opacity: .45 }, line: { color: qcColors.genes }, boxpoints: 'all', jitter: .35, pointpos: 0 },
+            { type: 'box', name: 'All reads', y: dist.all_reads, marker: { color: qcColors.reads, size: 3, opacity: .45 }, line: { color: qcColors.reads }, boxpoints: 'all', jitter: .35, pointpos: 0, yaxis: 'y2' }
+        ], plotLayout({
+            boxmode: 'group',
+            height: 340,
+            margin: { l: 56, r: 56, t: 12, b: 54 },
+            yaxis: { title: 'Genes', zeroline: false, gridcolor: qcColors.grid },
             yaxis2: { title: 'Reads', overlaying: 'y', side: 'right', zeroline: false },
             legend: { orientation: 'h', x: .98, y: .98, xanchor: 'right', yanchor: 'top', bgcolor: 'rgba(255,255,255,0.75)' },
-            plot_bgcolor: 'rgba(0,0,0,0)',
-            paper_bgcolor: 'rgba(0,0,0,0)'
-        }, { responsive: true, displayModeBar: false });
+            title: { text: 'Read-based', x: 0.01, xanchor: 'left', y: 0.98, yanchor: 'top' }
+        }), { responsive: true, displayModeBar: false });
     }
     function normalizeSeriesByX(xVals, yVals) {
         const buckets = {};
@@ -640,35 +728,31 @@ ${plotly_loader_tag}
         const lib = normalizeSeriesByX(satX, satLib);
         const med = normalizeSeriesByX(satX, medUmi);
         const traces = [
-            { type: 'scatter', mode: 'lines+markers', x: lib.x, y: lib.y, name: 'Library saturation', line: { color: '#1f9d66' } }
+            { type: 'scatter', mode: 'lines+markers', x: lib.x, y: lib.y, name: 'Library saturation', line: { color: qcColors.umi, width: 2.4 }, marker: { size: 5 } }
         ];
-        if (med.x.length) traces.push({ type: 'scatter', mode: 'lines+markers', x: med.x, y: med.y, name: 'Median genes', yaxis: 'y2', line: { color: '#2563eb' } });
-        Plotly.newPlot(plot, traces, {
-            height: 360,
-            margin: { l: 48, r: 58, t: 12, b: 46 },
-            xaxis: { title: 'Depth fraction', range: [0, 1] },
-            yaxis: { title: 'Saturation (%)', range: [0, 105], zeroline: false },
+        if (med.x.length) traces.push({ type: 'scatter', mode: 'lines+markers', x: med.x, y: med.y, name: 'Median genes', yaxis: 'y2', line: { color: qcColors.genes, width: 2.4 }, marker: { size: 5 } });
+        Plotly.newPlot(plot, traces, plotLayout({
+            height: 430,
+            margin: { l: 54, r: 62, t: 16, b: 64 },
+            xaxis: { title: 'Depth fraction', range: [0, 1], automargin: true, gridcolor: qcColors.grid },
+            yaxis: { title: 'Saturation (%)', range: [0, 105], zeroline: false, gridcolor: qcColors.grid },
             yaxis2: { title: 'Median genes', overlaying: 'y', side: 'right', zeroline: false },
-            legend: { orientation: 'v', x: .98, y: .98, xanchor: 'right', yanchor: 'top', bgcolor: 'rgba(255,255,255,0.75)' },
-            plot_bgcolor: 'rgba(0,0,0,0)',
-            paper_bgcolor: 'rgba(0,0,0,0)'
-        }, { responsive: true, displayModeBar: false });
+            legend: { orientation: 'v', x: .98, y: .98, xanchor: 'right', yanchor: 'top', bgcolor: 'rgba(255,255,255,0.75)' }
+        }), { responsive: true, displayModeBar: false });
     }
     function renderGeneBody() {
         const plot = el('gene-body-plot');
         if (!window.Plotly || !geneBodyX.length) { plot.innerHTML = '<div class="empty">No gene body data</div>'; return; }
         Plotly.newPlot(plot, [
-            { type: 'scatter', mode: 'lines', x: geneBodyX, y: geneBodyInt, name: 'Internal', line: { color: '#2563eb' } },
-            { type: 'scatter', mode: 'lines', x: geneBodyX, y: geneBodyUmi, name: 'UMI', line: { color: '#dc2626' } }
-        ], {
-            height: 360,
-            margin: { l: 48, r: 12, t: 12, b: 46 },
-            xaxis: { title: "Gene body percentile (5'->3')" },
-            yaxis: { title: 'Coverage', range: [0, 1.05], zeroline: false },
-            legend: { orientation: 'v', x: .98, y: .98, xanchor: 'right', yanchor: 'top', bgcolor: 'rgba(255,255,255,0.75)' },
-            plot_bgcolor: 'rgba(0,0,0,0)',
-            paper_bgcolor: 'rgba(0,0,0,0)'
-        }, { responsive: true, displayModeBar: false });
+            { type: 'scatter', mode: 'lines', x: geneBodyX, y: geneBodyInt, name: 'Internal', line: { color: qcColors.internal, width: 2.4 } },
+            { type: 'scatter', mode: 'lines', x: geneBodyX, y: geneBodyUmi, name: 'UMI', line: { color: qcColors.umi, width: 2.4 } }
+        ], plotLayout({
+            height: 430,
+            margin: { l: 54, r: 22, t: 16, b: 64 },
+            xaxis: { title: "Gene body percentile (5'->3')", automargin: true, gridcolor: qcColors.grid },
+            yaxis: { title: 'Coverage', range: [0, 1.05], zeroline: false, automargin: true, gridcolor: qcColors.grid },
+            legend: { orientation: 'v', x: .98, y: .98, xanchor: 'right', yanchor: 'top', bgcolor: 'rgba(255,255,255,0.75)' }
+        }), { responsive: true, displayModeBar: false });
     }
     function renderStatsTable() {
         const table = el('stats-table');
@@ -681,14 +765,14 @@ ${plotly_loader_tag}
             'umi_reads': 'UMI Reads',
             'internal_reads': 'Internal Reads',
             'MappingRatio': 'Mapping Ratio',
-            'InExOverAll': 'Exon+Intron / All',
+            'InExOverAll': 'Exon+Intron ratio',
             'UMIfrac': 'UMI Fraction',
             'Intron_Exon_genes': 'Intron/Exon Genes',
             'Intron_Exon_umis': 'Intron/Exon UMIs'
         };
 
         const statsWithDerived = stats.map(function(row) {
-            const allReads = metricValue(row, 'allreads');
+            const allReads = usedReads(row);
             const exon = num(row.Exon_reads) || 0;
             const intron = num(row.intron_reads) ?? num(row.Intron_reads) ?? 0;
             const ratio = (allReads && allReads > 0) ? (exon + intron) / allReads : null;
@@ -698,7 +782,7 @@ ${plotly_loader_tag}
         let sortCol = null;
         let sortAsc = true;
         let currentPage = 1;
-        let rowsPerPage = 50;
+        let rowsPerPage = 10;
 
         function draw() {
             count.textContent = currentRows.length + ' wells';
@@ -718,7 +802,7 @@ ${plotly_loader_tag}
             const pageRows = currentRows.slice(startIdx, endIdx);
 
             let bodyHtml = '<tbody>' + pageRows.map(function(row) {
-                return '<tr>' + cols.map(function(c) {
+                return '<tr class="' + rowClass(row, row.InExOverAll) + '">' + cols.map(function(c) {
                     const numeric = c !== 'wellID';
                     const v = (c === 'MappingRatio' || c === 'UMIfrac' || c === 'InExOverAll') ? fmtPct(row[c]) : (numeric ? fmtInt(row[c]) : String(row[c] || ''));
                     return '<td class="' + (numeric ? 'numeric' : '') + '">' + v + '</td>';

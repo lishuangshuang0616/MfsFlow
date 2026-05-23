@@ -39,6 +39,7 @@ def run_pipeline_stages(yaml_file):
             print(f"Stage: {which_stage}")
             timer = PipelineTimer(timing_path, runtime.project)
             print(f"Timing log: {timing_path}")
+            print(f"Temporary chunk directory: {runtime.tmp_merge_path}")
 
             def run_stage_cmd(cmd, stage_name, shell=False):
                 run_timed_stage_cmd(cmd, stage_name, run_log, exec_env, timer, log_path, shell=shell)
