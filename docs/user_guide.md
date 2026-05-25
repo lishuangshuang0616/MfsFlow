@@ -86,7 +86,7 @@ S2_R1.fq.gz,S2_R2.fq.gz,TGCATGCATGCATGCATGCA
 │   ├── SA                  # STAR suffix array
 │   └── ...
 └── genes/
-    └── genes.gtf           # Gene annotation file
+    └── genes.gtf           # Or genes.gtf.gz; gene annotation file
 ```
 
 #### Building STAR Index
@@ -136,7 +136,7 @@ mfsflow \
 | Argument | Required | Description |
 |----------|----------|-------------|
 | `--fastqs` | Yes | Directory containing input R1/R2 FASTQ files |
-| `--genomeDir` | Yes | Reference directory containing `star/` and `genes/genes.gtf` |
+| `--genomeDir` | Yes | Reference directory containing `star/` and `genes/genes.gtf` or `genes/genes.gtf.gz` |
 | `--sample` | Yes | Sample name (used for output naming) |
 | `--outdir` | No | Output directory (default: `./<sample_name>`) |
 | `--threads` | No | Number of threads (default: 20) |

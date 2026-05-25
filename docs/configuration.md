@@ -165,12 +165,12 @@ sequence_files:
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `reference.STAR_index` | string | (required) | Path to STAR genome index directory |
-| `reference.GTF_file` | string | (required) | Path to gene annotation file (GTF format) |
+| `reference.GTF_file` | string | (required) | Path to gene annotation file (`.gtf` or `.gtf.gz`) |
 | `reference.additional_files` | string | null | Additional reference files (optional) |
 | `reference.additional_STAR_params` | string | "--clip3pAdapterSeq CTGTCTCTTATACACATCT" | Additional STAR parameters |
 
 ### Command-Line Equivalent
-- Set via `--genomeDir` (expects `star/` and `genes/genes.gtf` subdirectories)
+- Set via `--genomeDir` (expects `star/` and `genes/genes.gtf` or `genes/genes.gtf.gz`)
 
 ### Example
 ```yaml
@@ -189,7 +189,7 @@ reference:
 /path/to/reference/
 ├── star/              # STAR genome index directory
 └── genes/
-    └── genes.gtf      # Gene annotation used for feature counting
+    └── genes.gtf      # Or genes.gtf.gz; gene annotation used for feature counting
 ```
 
 The pipeline then resolves:
@@ -206,7 +206,8 @@ Compatible reference databases include:
 - 10x Genomics Cell Ranger references, as long as the STAR index directory and GTF are exposed in the expected paths or copied/symlinked to the layout above.
 - Custom references built with STAR from a genome FASTA and GTF.
 
-For Cell Ranger-style references, the annotation is usually under `genes/genes.gtf`.
+For Cell Ranger-style references, the annotation is usually under `genes/genes.gtf`
+or `genes/genes.gtf.gz`; both are supported.
 If the STAR index is stored in a different subdirectory, create a symlink named `star`
 or set `reference.STAR_index` directly in the YAML config.
 

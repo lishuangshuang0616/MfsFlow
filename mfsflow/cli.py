@@ -1,30 +1,20 @@
 import argparse
 import os
 import sys
-import time
-from datetime import datetime
-from pathlib import Path
 
 _SRC_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "src")
 if os.path.isdir(_SRC_DIR) and _SRC_DIR not in sys.path:
     sys.path.insert(0, _SRC_DIR)
 
-from pipeline_config import build_base_config, resolve_samplesheet_barcodes
-from run_config import write_run_config
-from path_layout import logs_dir
-
-from mfsflow.bootstrap import create_barcode_tables, create_output_dirs, process_fastq_inputs
-from mfsflow.config.validation import require_supported_python, validate_input_files
-from mfsflow.pipeline.runner import run_pipeline_stages
-from mfsflow.runtime import PipelineTimer, format_duration
-from mfsflow.stages import FILTERING, STAGE_ORDER
+FILTERING = "Filtering"
+STAGE_ORDER = ("Filtering", "Mapping", "Counting", "Summarising")
 
 
 def build_parser():
     parser = argparse.ArgumentParser(description="MfsFlow Data Analysis Pipeline")
     parser.add_argument("--fastqs", required=True, help="Directory containing input R1/R2 FASTQ files")
     parser.add_argument("--samplesheet", help="CSV samplesheet for equal-length R1/R2 data")
-    parser.add_argument("--genomeDir", required=True, help="Reference directory containing star/ and genes/genes.gtf")
+    parser.add_argument("--genomeDir", required=True, help="Reference directory containing star/ and genes/genes.gtf or genes.gtf.gz")
     parser.add_argument("--sample", required=True, help="Sample name")
     parser.add_argument("--outdir", help="Output directory (default: ./<sample_name>)")
     parser.add_argument("--threads", type=int, default=20, help="Number of threads")
@@ -41,6 +31,12 @@ def build_parser():
 
 def generate_report(config):
     try:
+        from datetime import datetime
+        from pathlib import Path
+
+        from path_layout import logs_dir
+        from mfsflow.runtime import PipelineTimer
+
         if str(Path(__file__).resolve().parents[1] / "src") not in sys.path:
             sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
         import report as report
@@ -55,8 +51,20 @@ def generate_report(config):
 
 
 def main(argv=None):
-    require_supported_python()
     args = build_parser().parse_args(argv)
+
+    import time
+    from datetime import datetime
+    from pathlib import Path
+
+    from pipeline_config import build_base_config, resolve_samplesheet_barcodes
+    from run_config import write_run_config
+    from mfsflow.bootstrap import create_barcode_tables, create_output_dirs, process_fastq_inputs
+    from mfsflow.config.validation import require_supported_python, validate_input_files
+    from mfsflow.pipeline.runner import run_pipeline_stages
+    from mfsflow.runtime import format_duration
+
+    require_supported_python()
 
     print(f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")} Start analysis for {args.sample}.', flush=True)
 

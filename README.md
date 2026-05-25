@@ -73,7 +73,8 @@ Ensure STAR, Samtools, Pigz, Seqkit, and FeatureCounts are in your PATH, or spec
 
 Reference databases can be built with STAR directly, or prepared from compatible
 DNBelab C Series (`dnbc4tools`) and Cell Ranger references. The expected layout is
-`<genomeDir>/star` for the STAR index and `<genomeDir>/genes/genes.gtf` for the GTF.
+`<genomeDir>/star` for the STAR index and `<genomeDir>/genes/genes.gtf` or
+`<genomeDir>/genes/genes.gtf.gz` for the GTF.
 
 ## 📚 Quick Start
 
@@ -225,7 +226,7 @@ STAR --runMode genomeGenerate \
      --runThreadN 20
 ```
 
-The pipeline expects STAR index at `<genomeDir>/star` and GTF at `<genomeDir>/genes/genes.gtf`.
+The pipeline expects STAR index at `<genomeDir>/star` and GTF at `<genomeDir>/genes/genes.gtf` or `<genomeDir>/genes/genes.gtf.gz`.
 
 ## 🤝 Contributing
 

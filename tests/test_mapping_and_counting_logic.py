@@ -1,10 +1,12 @@
 import os
 import sys
+import gzip
+import tempfile
 import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from mapping_analysis import build_star_misc_base
+from mapping_analysis import build_star_misc_base, setup_gtf
 from run_featurecounts import build_featurecounts_cmd, normalize_read_category, resolve_counting_strand_modes, should_count_read
 
 
@@ -31,6 +33,24 @@ class MappingAndCountingLogicTests(unittest.TestCase):
         )
         self.assertNotIn("--sjdbOverhang", misc)
         self.assertNotIn("--sjdbGTFfile", misc)
+
+    def test_setup_gtf_decompresses_gzipped_gtf(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            gz_gtf = os.path.join(tmpdir, "genes.gtf.gz")
+            with gzip.open(gz_gtf, "wt") as handle:
+                handle.write('chr1\tT\texon\t1\t10\t.\t+\t.\tgene_id "g1";\n')
+
+            final_gtf, extra = setup_gtf(
+                {"reference": {"GTF_file": gz_gtf, "STAR_index": tmpdir}},
+                "Sample01",
+                tmpdir,
+                "samtools",
+            )
+
+            self.assertEqual(extra, "")
+            self.assertTrue(final_gtf.endswith("Sample01.final_annot.gtf"))
+            with open(final_gtf) as handle:
+                self.assertIn('gene_id "g1"', handle.read())
 
     def test_featurecounts_pe_layout_enables_pair_options(self):
         cmd = build_featurecounts_cmd(

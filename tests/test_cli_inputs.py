@@ -1,11 +1,12 @@
 import os
 import sys
+import gzip
 import tempfile
 import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from pipeline_config import discover_fastq_pairs, load_samplesheet, resolve_samplesheet_barcodes
+from pipeline_config import configure_reference, discover_fastq_pairs, load_samplesheet, resolve_samplesheet_barcodes
 
 
 class CliInputTests(unittest.TestCase):
@@ -67,6 +68,20 @@ class CliInputTests(unittest.TestCase):
 
             with self.assertRaisesRegex(ValueError, "Duplicate read1/read2 pair"):
                 load_samplesheet(sheet, tmpdir)
+
+    def test_configure_reference_accepts_gzipped_gtf(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            os.makedirs(os.path.join(tmpdir, "genes"))
+            os.makedirs(os.path.join(tmpdir, "star"))
+            gz_gtf = os.path.join(tmpdir, "genes", "genes.gtf.gz")
+            with gzip.open(gz_gtf, "wt") as handle:
+                handle.write('chr1\tT\texon\t1\t10\t.\t+\t.\tgene_id "g1";\n')
+
+            config = {"reference": {}}
+            configure_reference(config, tmpdir)
+
+            self.assertEqual(config["reference"]["GTF_file"], gz_gtf)
+            self.assertEqual(config["reference"]["STAR_index"], os.path.join(tmpdir, "star"))
 
 
 if __name__ == "__main__":

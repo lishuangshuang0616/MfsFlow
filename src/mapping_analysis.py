@@ -8,6 +8,7 @@ import math
 import shutil
 import collections
 import itertools
+import gzip
 import sys
 
 from path_layout import barcode_dir
@@ -190,7 +191,11 @@ def setup_gtf(config, project, out_dir, samtools):
     star_index = config['reference'].get('STAR_index', '')
     if not additional_files:
         final_gtf = os.path.join(out_dir, f"{project}.final_annot.gtf")
-        shutil.copyfile(gtf, final_gtf)
+        if str(gtf).endswith(".gz"):
+            with gzip.open(gtf, "rt") as infile, open(final_gtf, "w") as outfile:
+                shutil.copyfileobj(infile, outfile)
+        else:
+            shutil.copyfile(gtf, final_gtf)
         return final_gtf, ""
     
     # Process additional fasta
@@ -226,7 +231,8 @@ def setup_gtf(config, project, out_dir, samtools):
     final_gtf = os.path.join(out_dir, f"{project}.final_annot.gtf")
     with open(final_gtf, 'w') as outfile:
         # Cat original GTF
-        with open(gtf, 'r') as infile:
+        opener = gzip.open if str(gtf).endswith(".gz") else open
+        with opener(gtf, 'rt') as infile:
             shutil.copyfileobj(infile, outfile)
         # Cat additional
         with open(add_gtf_path, 'r') as infile:

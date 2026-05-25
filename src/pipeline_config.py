@@ -103,9 +103,15 @@ def configure_reference(config, genome_dir):
     genome_dir = os.path.abspath(genome_dir)
     config["reference"]["STAR_index"] = os.path.join(genome_dir, "star")
 
-    gtf_file = os.path.join(genome_dir, "genes", "genes.gtf")
-    if not os.path.exists(gtf_file):
-        raise FileNotFoundError(f"GTF file not found: {gtf_file}")
+    gtf_candidates = [
+        os.path.join(genome_dir, "genes", "genes.gtf"),
+        os.path.join(genome_dir, "genes", "genes.gtf.gz"),
+    ]
+    gtf_file = next((path for path in gtf_candidates if os.path.exists(path)), None)
+    if not gtf_file:
+        raise FileNotFoundError(
+            "GTF file not found. Checked: " + ", ".join(gtf_candidates)
+        )
     config["reference"]["GTF_file"] = gtf_file
 
 
