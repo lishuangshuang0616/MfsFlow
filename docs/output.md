@@ -29,10 +29,19 @@ out_dir/
 │   ├── intermediate/       # Temporary files
 │   └── *.bam              # Final BAM files
 └── outs/                   # Final outputs for users
-    ├── auto_report.html     # Automatic report
-    ├── manual_report.html  # Manual report
-    └── ...
+    ├── <project>_auto_plate_report.html  # Automatic report
+    ├── <project>_manual_report.html      # Manual report
+    ├── expression/                       # H5AD and MEX matrices moved from XPRESS_PROCESSING/expression/
+    ├── stats/                            # QC tables, read stats, saturation tables, and plots
+    ├── bam/                              # Final UB-corrected BAM and index
+    └── config/                           # run_config.yaml and expected barcode table
 ```
+
+`XPRESS_PROCESSING/` is the working directory used while the pipeline is running.
+MfsFlow supports resuming from intermediate stages if a run stops before completion.
+After a successful report/export step, customer-facing deliverables are moved to
+`outs/`; completed runs should be consumed from `outs/`, not resumed from the moved
+working outputs.
 
 ## Configuration Files
 
@@ -157,6 +166,9 @@ Barcode discovery results (only in `--discoverBarcodes` mode).
 ## Expression Files
 
 Located in `XPRESS_PROCESSING/expression/`:
+
+The same H5AD and MEX deliverables are moved to `outs/expression/` after report
+generation.
 
 ### MEX Format (Matrix Exchange)
 Standard single-cell expression matrices. Each matrix type is written as a
@@ -344,6 +356,8 @@ Legacy/UMI-read AnnData output (if applicable).
 
 Located in `XPRESS_PROCESSING/stats/`:
 
+Key statistics tables and plots are moved to `outs/stats/`.
+
 ### qc_stats.tsv
 Per-cell QC statistics.
 
@@ -435,6 +449,8 @@ Barcode-corrected BAM files.
 ## Final BAM Files
 
 Located in `XPRESS_PROCESSING/`:
+
+The final UB-corrected BAM and its index are moved to `outs/bam/`.
 
 ### <project>.filtered.Aligned.GeneTagged.UBcorrected.sorted.bam
 Final UB-corrected sorted BAM file.

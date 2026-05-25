@@ -138,6 +138,10 @@ Choose one of the following barcode selection modes:
 
 **Note**: For `--manual`, `--plate`, and `--expectBarcode`, barcode detection is strict. If none of the expected barcodes are observed, the run stops instead of falling back to top-count barcodes. `--discoverBarcodes` compares observed read barcodes against the bundled manual/plate barcode lists with exact/Hamming-1 matching, writes a discovery report, then continues with the inferred barcode set.
 
+**Recommended when unsure**: Use `--discoverBarcodes` if the exact plate/manual barcode
+set is uncertain. It is usually the safest first-pass mode because it reports which
+barcode set was inferred before continuing.
+
 ## 📖 Documentation
 
 Comprehensive documentation is available in the `docs/` directory:
@@ -166,8 +170,16 @@ output_directory/
 │   └── *.bam              # Final UB-corrected sorted BAM
 └── outs/                   # Final reports and customer-facing outputs
     ├── auto_report.html    # Automatic report
-    └── manual_report.html  # Manual report
+    ├── manual_report.html  # Manual report
+    ├── expression/         # H5AD and MEX matrices
+    ├── stats/              # QC tables and plots
+    ├── bam/                # Final UB-corrected BAM and index
+    └── config/             # Run config and expected barcode table
 ```
+
+MfsFlow supports resuming interrupted runs from intermediate stages. After a run
+finishes and reports are generated, final deliverables are moved into `outs/`;
+use `outs/` as the completed result directory.
 
 ## 🔧 Advanced Usage
 
@@ -210,7 +222,6 @@ STAR --runMode genomeGenerate \
      --genomeDir /path/to/star_index \
      --genomeFastaFiles /path/to/genome.fa \
      --sjdbGTFfile /path/to/genes.gtf \
-     --sjdbOverhang 100 \
      --runThreadN 20
 ```
 
@@ -230,5 +241,5 @@ For questions, bug reports, or feature requests, please open an issue on GitHub.
 
 ---
 
-**Version**: 0.1.0  
+**Version**: 1.0.0  
 **Last Updated**: 2026-05-25

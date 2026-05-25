@@ -2,6 +2,7 @@ import json
 import csv
 import statistics
 import gzip
+import shutil
 from pathlib import Path
 from string import Template
 import re
@@ -523,6 +524,94 @@ def create_report_directories(sample_outdir, _config=None):
     
     return outs_dir
 
+
+def _move_file_if_exists(src, dst):
+    src = Path(src)
+    dst = Path(dst)
+    if not src.exists() or not src.is_file():
+        return False
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    if dst.exists():
+        dst.unlink()
+    shutil.move(str(src), str(dst))
+    return True
+
+
+def _move_tree_if_exists(src, dst):
+    src = Path(src)
+    dst = Path(dst)
+    if not src.exists() or not src.is_dir():
+        return False
+    if dst.exists():
+        shutil.rmtree(dst)
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    shutil.move(str(src), str(dst))
+    return True
+
+
+def export_deliverables_to_outs(sample_outdir, outs_dir, project):
+    sample_outdir = Path(sample_outdir)
+    outs_dir = Path(outs_dir)
+    project = str(project or "").strip()
+    moved = []
+
+    expression_out = Path(expression_dir(str(sample_outdir)))
+    if expression_out.exists():
+        for h5ad in sorted(expression_out.glob("*.h5ad")):
+            dst = outs_dir / "expression" / h5ad.name
+            if _move_file_if_exists(h5ad, dst):
+                moved.append(str(dst))
+        for mex_dir in sorted(expression_out.iterdir()):
+            if not mex_dir.is_dir():
+                continue
+            if (
+                (mex_dir / "matrix.mtx.gz").exists()
+                and (mex_dir / "features.tsv.gz").exists()
+                and (mex_dir / "barcodes.tsv.gz").exists()
+            ):
+                dst = outs_dir / "expression" / mex_dir.name
+                if _move_tree_if_exists(mex_dir, dst):
+                    moved.append(str(dst))
+
+    stats_out = Path(stats_dir(str(sample_outdir)))
+    if stats_out.exists():
+        for pattern in ("*.stats.tsv", "*.saturation.tsv", "*.read_stats.json", "*.q30_stats.tsv", "*.pdf", "*.png", "*.svg"):
+            for src in sorted(stats_out.glob(pattern)):
+                dst = outs_dir / "stats" / src.name
+                if _move_file_if_exists(src, dst):
+                    moved.append(str(dst))
+
+    bam_patterns = []
+    if project:
+        bam_patterns.extend([
+            f"{project}.filtered.Aligned.GeneTagged.UBcorrected.sorted.bam*",
+            f"{project}.filtered.Aligned.GeneTagged.UBcorrected.bam*",
+        ])
+    bam_patterns.extend([
+        "*.filtered.Aligned.GeneTagged.UBcorrected.sorted.bam*",
+        "*.filtered.Aligned.GeneTagged.UBcorrected.bam*",
+    ])
+    seen = set()
+    for pattern in bam_patterns:
+        for src in sorted(sample_outdir.glob(pattern)):
+            if src in seen or not src.is_file():
+                continue
+            seen.add(src)
+            dst = outs_dir / "bam" / src.name
+            if _move_file_if_exists(src, dst):
+                moved.append(str(dst))
+
+    cfg_out = Path(config_dir(str(sample_outdir)))
+    if cfg_out.exists():
+        for pattern in ("run_config.yaml", "expect_id_barcode.tsv"):
+            for src in sorted(cfg_out.glob(pattern)):
+                dst = outs_dir / "config" / src.name
+                if _move_file_if_exists(src, dst):
+                    moved.append(str(dst))
+
+    print(f"Moved {len(moved)} deliverable file(s)/dir(s) to: {outs_dir}")
+    return moved
+
 def calculate_summary_metrics(sample_outdir, project=""):
     """
     Calculate summary metrics from stats.tsv
@@ -980,3 +1069,8 @@ def generate_multi_report(name, outdir, config):
         print("HTML report generation complete.")
     except Exception as e:
         print(f"Error substituting template: {e}")
+    finally:
+        try:
+            export_deliverables_to_outs(sample_outdir, outs_dir, name)
+        except Exception as e:
+            print(f"Warning: Failed to export deliverables to outs: {e}")

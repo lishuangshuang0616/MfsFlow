@@ -246,6 +246,10 @@ mfsflow \
   --threads 20
 ```
 
+`--discoverBarcodes` is recommended when you are not completely sure which plate
+or manual barcode set was used. It writes a discovery report first, then continues
+with the inferred barcode set.
+
 #### Example 5: Equal-Length R1/R2 with Samplesheet
 ```bash
 mfsflow \
@@ -320,7 +324,9 @@ Use case: Completely custom barcode designs.
 - Writes discovery report before proceeding
 - Less strict than other modes
 
-Use case: Unknown or complex barcode configurations.
+Use case: Unknown or complex barcode configurations. This is often the best
+first-pass mode for new datasets because it gives a transparent barcode inference
+report instead of requiring you to guess the plate/manual ID upfront.
 
 ## Interpreting Reports
 
