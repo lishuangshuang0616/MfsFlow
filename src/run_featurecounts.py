@@ -6,8 +6,6 @@ import subprocess
 import csv
 import shutil
 import json
-import bisect
-import math
 import collections
 import gzip
 import glob
@@ -51,19 +49,24 @@ def get_bam_chromosomes(bam_file, samtools_exec='samtools'):
 
 def load_gene_models(gtf_file):
     """
-    Loads exon models from GTF, merges them, and calculates 100 exon-body percentile points for each gene.
-    The coordinate list is sorted for fast lookup, while each coordinate keeps its 5'->3' percentile index.
+    Loads transcript-body models from GTF for RSeQC-like gene body coverage.
+    For each gene, the longest transcript is selected, its exons are merged, and
+    read overlaps are later projected onto 100 transcript-body bins in 5'->3'
+    orientation.
     """
     print(f"Loading gene models for stats from {gtf_file}...")
-    gene_exons = collections.defaultdict(list)
-    gene_strand = {}
-    gene_chrom = {}
+    transcripts = collections.defaultdict(lambda: collections.defaultdict(lambda: {
+        "chrom": None,
+        "strand": ".",
+        "exons": [],
+    }))
 
     if not os.path.exists(gtf_file):
         print("Warning: GTF file not found. Coverage stats will be skipped.")
         return {}
 
-    with open(gtf_file, 'r') as f:
+    opener = gzip.open if str(gtf_file).endswith(".gz") else open
+    with opener(gtf_file, 'rt') as f:
         for line in f:
             if line.startswith('#'): continue
             parts = line.strip().split('\t')
@@ -76,66 +79,77 @@ def load_gene_models(gtf_file):
             strand = parts[6]
             attributes = parts[8]
 
-            gene_id = None
-            if 'gene_id "' in attributes:
-                gene_id = attributes.split('gene_id "')[1].split('"')[0]
-            elif 'gene_id' in attributes:
-                # Fallback for some GTF formats
-                try:
-                    gene_id = attributes.split('gene_id')[1].strip().split(';')[0].strip().strip('"')
-                except:
-                    pass
+            gene_id = _parse_gene_id(attributes)
+            transcript_id = _parse_transcript_id(attributes) or gene_id
 
-            if gene_id:
-                gene_exons[gene_id].append((start, end))
-                gene_strand[gene_id] = strand
-                gene_chrom[gene_id] = chrom
+            if gene_id and transcript_id:
+                tx = transcripts[gene_id][transcript_id]
+                tx["chrom"] = chrom
+                tx["strand"] = strand
+                tx["exons"].append((start, end + 1))
 
     models = {}
-    for gene_id, exons in gene_exons.items():
-        exons.sort()
-        merged = []
-        if not exons: continue
-
-        curr_s, curr_e = exons[0]
-        for s, e in exons[1:]:
-            if s <= curr_e + 1:
-                curr_e = max(curr_e, e)
-            else:
-                merged.append((curr_s, curr_e))
-                curr_s, curr_e = s, e
-        merged.append((curr_s, curr_e))
-
-        gene_all_base = []
-        for s, e in merged:
-            gene_all_base.extend(range(s, e + 1))
-
-        # Need enough bases for percentile calculation
-        if len(gene_all_base) < 100:
+    interval_index = collections.defaultdict(list)
+    for gene_id, tx_by_id in transcripts.items():
+        best = None
+        for transcript_id, tx in tx_by_id.items():
+            exons = _merge_half_open_intervals(tx["exons"])
+            length = sum(e - s for s, e in exons)
+            if length < 100:
+                continue
+            candidate = {
+                "gene_id": gene_id,
+                "transcript_id": transcript_id,
+                "chrom": tx["chrom"],
+                "strand": tx["strand"],
+                "exons": exons,
+                "length": length,
+            }
+            if best is None or (length, transcript_id) > (best["length"], best["transcript_id"]):
+                best = candidate
+        if best is None:
             continue
 
-        gene_all_base.sort()
-        strand = gene_strand.get(gene_id, '+')
-        if strand == '-':
-            gene_all_base.reverse()
+        models[gene_id] = best
+        for exon_start, exon_end in best["exons"]:
+            first_bin = exon_start // _GENEBODY_BIN_SIZE
+            last_bin = (exon_end - 1) // _GENEBODY_BIN_SIZE
+            for bin_id in range(first_bin, last_bin + 1):
+                interval_index[(best["chrom"], bin_id)].append(gene_id)
 
-        points_5_to_3 = []
-        size = len(gene_all_base)
-        for i in range(1, 101):
-            idx = int(math.ceil(size * i / 100.0)) - 1
-            points_5_to_3.append(gene_all_base[idx])
-
-        indexed_points = sorted((coord, pct_idx) for pct_idx, coord in enumerate(points_5_to_3))
-
-        models[gene_id] = {
-            "chrom": gene_chrom.get(gene_id),
-            "strand": strand,
-            "percentile_coords": [coord for coord, _ in indexed_points],
-            "percentile_bins": [pct_idx for _, pct_idx in indexed_points],
-        }
-
-    print(f"Loaded {len(models)} gene models.")
+    models["__index__"] = interval_index
+    print(f"Loaded {len(models) - 1} gene models.")
     return models
+
+
+_GENEBODY_BIN_SIZE = 100000
+
+
+def _parse_transcript_id(attributes):
+    if 'transcript_id "' in attributes:
+        return attributes.split('transcript_id "')[1].split('"')[0]
+    if 'transcript_id' in attributes:
+        try:
+            return attributes.split('transcript_id')[1].strip().split(';')[0].strip().strip('"')
+        except Exception:
+            return None
+    return None
+
+
+def _merge_half_open_intervals(intervals):
+    intervals = sorted(intervals)
+    if not intervals:
+        return []
+    merged = []
+    curr_start, curr_end = intervals[0]
+    for next_start, next_end in intervals[1:]:
+        if next_start <= curr_end:
+            curr_end = max(curr_end, next_end)
+        else:
+            merged.append((curr_start, curr_end))
+            curr_start, curr_end = next_start, next_end
+    merged.append((curr_start, curr_end))
+    return merged
 
 
 def _parse_gene_id(attributes):
@@ -712,6 +726,90 @@ def _sam_blocks(pos_1based, cigar):
         num = 0
     return blocks
 
+
+def _pysam_blocks_1based_half_open(read_obj):
+    """Convert pysam 0-based half-open blocks to 1-based half-open blocks."""
+    return [(start + 1, end + 1) for start, end in read_obj.get_blocks()]
+
+
+def _sam_line_blocks_1based_half_open(parts):
+    pos = int(parts[3])
+    cigar = parts[5]
+    blocks = []
+    curr_pos = pos
+    num = 0
+    for ch in cigar:
+        if ch.isdigit():
+            num = num * 10 + int(ch)
+        else:
+            if ch in "M=X":
+                blocks.append((curr_pos, curr_pos + num))
+                curr_pos += num
+            elif ch in "DN":
+                curr_pos += num
+            elif ch in "SH":
+                pass
+            num = 0
+    return blocks
+
+
+def _candidate_gene_body_models(chrom, blocks, gene_models):
+    index = gene_models.get("__index__", {})
+    candidate_ids = set()
+    for block_start, block_end in blocks:
+        first_bin = block_start // _GENEBODY_BIN_SIZE
+        last_bin = (block_end - 1) // _GENEBODY_BIN_SIZE
+        for bin_id in range(first_bin, last_bin + 1):
+            candidate_ids.update(index.get((chrom, bin_id), ()))
+    return [gene_models[gene_id] for gene_id in candidate_ids if gene_id in gene_models]
+
+
+def _project_blocks_to_gene_body(model, blocks):
+    increments = [0.0] * 100
+    total_overlap = 0
+    length = model["length"]
+
+    exon_offsets = []
+    offset = 0
+    exons_5_to_3 = list(reversed(model["exons"])) if model["strand"] == "-" else model["exons"]
+    for exon_start, exon_end in exons_5_to_3:
+        exon_offsets.append((exon_start, exon_end, offset))
+        offset += exon_end - exon_start
+
+    for block_start, block_end in blocks:
+        for exon_start, exon_end, exon_offset in exon_offsets:
+            ov_start = max(block_start, exon_start)
+            ov_end = min(block_end, exon_end)
+            if ov_end <= ov_start:
+                continue
+
+            if model["strand"] == "-":
+                tx_start = exon_offset + (exon_end - ov_end)
+                tx_end = exon_offset + (exon_end - ov_start)
+            else:
+                tx_start = exon_offset + (ov_start - exon_start)
+                tx_end = exon_offset + (ov_end - exon_start)
+
+            total_overlap += ov_end - ov_start
+            _add_transcript_interval_to_bins(tx_start, tx_end, length, increments)
+
+    return total_overlap, increments
+
+
+def _add_transcript_interval_to_bins(tx_start, tx_end, length, increments):
+    if tx_end <= tx_start:
+        return
+    first_bin = min(99, (tx_start * 100) // length)
+    last_bin = min(99, ((tx_end - 1) * 100) // length)
+    for bin_idx in range(first_bin, last_bin + 1):
+        bin_start = (bin_idx * length) // 100
+        bin_end = ((bin_idx + 1) * length) // 100
+        if bin_end <= bin_start:
+            continue
+        overlap = min(tx_end, bin_end) - max(tx_start, bin_start)
+        if overlap > 0:
+            increments[bin_idx] += overlap / float(bin_end - bin_start)
+
 def process_bam_and_calculate_stats(
     input_bam,
     out_bam,
@@ -773,61 +871,41 @@ def process_bam_and_calculate_stats(
 
     def update_coverage(read_obj, gene_models, cov_arr):
         if not collect_coverage or not gene_models: return False
-
-        gene_id = None
         if isinstance(read_obj, str):
-            gx_idx = read_obj.find("GX:Z:")
-            if gx_idx != -1:
-                end_gx = read_obj.find('\t', gx_idx)
-                if end_gx == -1: end_gx = len(read_obj)
-                gene_id = read_obj[gx_idx+5:end_gx].strip()
-        else:
-            if read_obj.has_tag('GX'):
-                gene_id = read_obj.get_tag('GX')
-
-        if not gene_id: return False
-
-        model = gene_models.get(gene_id)
-        if not model: return False
-
-        blocks = []
-        if isinstance(read_obj, str):
+            if not should_count_read(read_obj):
+                return False
             parts = read_obj.split('\t')
-            pos = int(parts[3])
-            cigar = parts[5]
-            curr_pos = pos
-            num = 0
-            for ch in cigar:
-                if ch.isdigit():
-                    num = num * 10 + int(ch)
-                else:
-                    if ch in "M=X":
-                        blocks.append((curr_pos, curr_pos + num))
-                        curr_pos += num
-                    elif ch in "DN":
-                        curr_pos += num
-                    elif ch in "SH":
-                        pass
-                    num = 0
+            if len(parts) < 6 or parts[2] == "*" or parts[5] == "*":
+                return False
+            chrom = parts[2]
+            blocks = _sam_line_blocks_1based_half_open(parts)
         else:
-            blocks = [(start + 1, end) for start, end in read_obj.get_blocks()]
+            if not should_count_read(read_obj) or read_obj.is_unmapped:
+                return False
+            chrom = read_obj.reference_name
+            blocks = _pysam_blocks_1based_half_open(read_obj)
 
         if not blocks: return False
 
-        pct_points = model["percentile_coords"]
-        pct_bins = model["percentile_bins"]
+        candidates = _candidate_gene_body_models(chrom, blocks, gene_models)
+        if not candidates:
+            return False
 
-        hit = False
-        for b_start, b_end in blocks:
-            idx_start = bisect.bisect_left(pct_points, b_start)
-            idx_end = bisect.bisect_right(pct_points, b_end - 1)
+        ranked = []
+        for model in candidates:
+            overlap, increments = _project_blocks_to_gene_body(model, blocks)
+            if overlap > 0:
+                ranked.append((overlap, model["gene_id"], increments))
+        if not ranked:
+            return False
 
-            if idx_end > idx_start:
-                hit = True
-                indices = range(idx_start, idx_end)
-                for i in indices:
-                    cov_arr[pct_bins[i]] += 1
-        return hit
+        ranked.sort(key=lambda item: (-item[0], item[1]))
+        if len(ranked) > 1 and ranked[0][0] == ranked[1][0]:
+            return False
+
+        for i, value in enumerate(ranked[0][2]):
+            cov_arr[i] += value
+        return True
 
     def choose_assignment_from_xt(xt_values):
         exon_gene = None
@@ -931,7 +1009,7 @@ def process_bam_and_calculate_stats(
                     f_out_ctx.close()
 
         print("\nProcessing complete (via pysam).")
-        return read_stats, cov_arr
+        return read_stats, cov_arr, cov_count
 
     except ImportError:
         print("pysam not found. Falling back to samtools pipe method...")
@@ -1050,7 +1128,7 @@ def process_bam_and_calculate_stats(
         proc_out.wait()
 
     print("\nProcessing complete.")
-    return read_stats, cov_arr
+    return read_stats, cov_arr, cov_count
 
 def split_bam_smartseq3(bam_file, threads, samtools_exec):
     print("Splitting BAM for Smart-seq3 processing (One-pass Optimized)...")
@@ -1188,6 +1266,8 @@ def main():
     total_read_stats = collections.defaultdict(lambda: collections.defaultdict(int))
     total_cov_umi = [0] * 100
     total_cov_int = [0] * 100
+    total_cov_umi_reads = 0
+    total_cov_int_reads = 0
 
     def merge_stats(dest_stats, src_stats):
         for bc, counts in src_stats.items():
@@ -1302,7 +1382,7 @@ def main():
         with pysam.AlignmentFile(fc_outputs[0][1], "rb", threads=int(num_threads)) as template_in:
             with pysam.AlignmentFile(final_bam, "wb", template=template_in, threads=int(num_threads)) as final_out:
                 for source_label, fc_bam, fc_strand_mode in fc_outputs:
-                    r_stats, cov = process_bam_and_calculate_stats(
+                    r_stats, cov, cov_reads = process_bam_and_calculate_stats(
                         fc_bam, final_bam, samtools_exec, num_threads,
                         gene_map, source_label=source_label, gene_models=gene_models,
                         collect_coverage=collect_coverage, output_handle=final_out,
@@ -1312,15 +1392,17 @@ def main():
                     merge_stats(total_read_stats, r_stats)
                     if source_label == "UMI":
                         merge_coverage(total_cov_umi, cov)
+                        total_cov_umi_reads += cov_reads
                     else:
                         merge_coverage(total_cov_int, cov)
+                        total_cov_int_reads += cov_reads
                     os.remove(fc_bam)
     else:
         print("pysam unavailable for direct final BAM writing; falling back to intermediate BAM merge.")
         bams_to_merge = []
         for source_label, fc_bam, fc_strand_mode in fc_outputs:
             processed_bam = fc_bam + ".processed.bam"
-            r_stats, cov = process_bam_and_calculate_stats(
+            r_stats, cov, cov_reads = process_bam_and_calculate_stats(
                 fc_bam, processed_bam, samtools_exec, num_threads,
                 gene_map, source_label=source_label, gene_models=gene_models,
                 collect_coverage=collect_coverage,
@@ -1330,8 +1412,10 @@ def main():
             merge_stats(total_read_stats, r_stats)
             if source_label == "UMI":
                 merge_coverage(total_cov_umi, cov)
+                total_cov_umi_reads += cov_reads
             else:
                 merge_coverage(total_cov_int, cov)
+                total_cov_int_reads += cov_reads
             os.remove(fc_bam)
             bams_to_merge.append(processed_bam)
 
@@ -1355,7 +1439,9 @@ def main():
     stats_data = {
         "read_stats": total_read_stats,
         "coverage_umi": total_cov_umi,
-        "coverage_int": total_cov_int
+        "coverage_int": total_cov_int,
+        "coverage_umi_reads": total_cov_umi_reads,
+        "coverage_internal_reads": total_cov_int_reads
     }
     with open(stats_out, 'w') as f:
         json.dump(stats_data, f)

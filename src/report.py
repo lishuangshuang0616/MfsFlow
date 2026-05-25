@@ -36,6 +36,7 @@ _JSON_ARRAY_PLACEHOLDERS = {
     "rna_gene_body_percentile",
     "rna_gene_body_umi_maxnorm",
     "rna_gene_body_internal_maxnorm",
+    "rna_gene_body_all_maxnorm",
     "rna_saturation_fraction",
     "rna_saturation_lib_pct",
     "rna_saturation_gene_pct",
@@ -802,6 +803,7 @@ def _process_rna_gene_body_coverage_data(sample_outdir, combined_context):
     combined_context['rna_gene_body_percentile'] = '[]'
     combined_context['rna_gene_body_umi_maxnorm'] = '[]'
     combined_context['rna_gene_body_internal_maxnorm'] = '[]'
+    combined_context['rna_gene_body_all_maxnorm'] = '[]'
     combined_context['rna_gene_body_coverage_available'] = False
     try:
         candidates = list(Path(stats_dir(str(sample_outdir))).glob('*.geneBodyCoverage.txt'))
@@ -814,6 +816,7 @@ def _process_rna_gene_body_coverage_data(sample_outdir, combined_context):
         x_vals = []
         umi_vals = []
         internal_vals = []
+        all_vals = []
         with open(gb_path, "r", encoding="utf-8", errors="ignore", newline="") as f:
             reader = csv.DictReader(f, delimiter="\t")
             for r in reader:
@@ -823,16 +826,19 @@ def _process_rna_gene_body_coverage_data(sample_outdir, combined_context):
                     x = float(str(r.get("Percentile", "")).strip() or 0)
                     umi = float(str(r.get("UMI_MaxNorm", "")).strip() or 0)
                     internal = float(str(r.get("Internal_MaxNorm", "")).strip() or 0)
+                    all_norm = float(str(r.get("All_MaxNorm", "")).strip() or 0)
                 except Exception:
                     continue
                 x_vals.append(x)
                 umi_vals.append(umi)
                 internal_vals.append(internal)
+                all_vals.append(all_norm)
 
         combined_context["rna_gene_body_percentile"] = json.dumps(x_vals)
         combined_context["rna_gene_body_umi_maxnorm"] = json.dumps(umi_vals)
         combined_context["rna_gene_body_internal_maxnorm"] = json.dumps(internal_vals)
-        combined_context["rna_gene_body_coverage_available"] = bool(len(x_vals) > 0 and len(x_vals) == len(umi_vals) == len(internal_vals))
+        combined_context["rna_gene_body_all_maxnorm"] = json.dumps(all_vals)
+        combined_context["rna_gene_body_coverage_available"] = bool(len(x_vals) > 0 and len(x_vals) == len(umi_vals) == len(internal_vals) == len(all_vals))
     except Exception as e:
         print(f"Warning: Failed to prepare RNA gene body coverage data: {e}")
 

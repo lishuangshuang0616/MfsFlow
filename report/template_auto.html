@@ -243,16 +243,16 @@ ${plotly_loader_tag}
         <h2>384-Well Plate QC</h2>
         <div class="toolbar">
             <label>Plate <select id="plate-select"></select></label>
-            <label>Metric
-                <select id="plate-metric">
-                    <option value="allreads">All reads</option>
-                    <option value="genes">Genes</option>
-                    <option value="umis">UMIs</option>
-                    <option value="mappingratio">Mapping ratio</option>
-                    <option value="umifrac">UMI fraction</option>
-                    <option value="exonintronratio">Exon/Intron ratio</option>
-                </select>
-            </label>
+                <label>Metric
+                    <select id="plate-metric">
+                        <option value="mappingratio" selected>Mapping ratio</option>
+                        <option value="allreads">All reads</option>
+                        <option value="genes">Genes</option>
+                        <option value="umis">UMIs</option>
+                        <option value="umifrac">UMI fraction</option>
+                        <option value="exonintronratio">Exon/Intron ratio</option>
+                    </select>
+                </label>
         </div>
         <div id="plate-plot" class="plot plate-plot"></div>
     </section>
@@ -364,6 +364,7 @@ ${plotly_loader_tag}
     const geneBodyX = parseJson('${rna_gene_body_percentile}', []);
     const geneBodyUmi = parseJson('${rna_gene_body_umi_maxnorm}', []);
     const geneBodyInt = parseJson('${rna_gene_body_internal_maxnorm}', []);
+    const geneBodyAll = parseJson('${rna_gene_body_all_maxnorm}', []);
 
     function parseJson(raw, fallback) {
         try {
@@ -754,6 +755,32 @@ ${plotly_loader_tag}
         const lib = normalizeSeriesByX(satX, satLib);
         const medUmiSeries = normalizeSeriesByX(satX, medUmi);
         const medReadSeries = normalizeSeriesByX(satX, medRead);
+        // Ensure curves start at (0,0)
+        function ensureZeroStart(series) {
+            if (!series.x.length) {
+                series.x = [0];
+                series.y = [0];
+                return;
+            }
+            const zeroIdx = series.x.indexOf(0);
+            if (zeroIdx === 0) {
+                // (0,0) already first point, ensure y=0
+                series.y[0] = 0;
+            } else if (zeroIdx > 0) {
+                // (0, y) exists but not first, move it to front
+                series.x.splice(zeroIdx, 1);
+                series.y.splice(zeroIdx, 1);
+                series.x.unshift(0);
+                series.y.unshift(0);
+            } else {
+                // No (0, *) point, insert at front
+                series.x.unshift(0);
+                series.y.unshift(0);
+            }
+        }
+        ensureZeroStart(lib);
+        ensureZeroStart(medUmiSeries);
+        ensureZeroStart(medReadSeries);
         const traces = [
             { type: 'scatter', mode: 'lines', x: lib.x, y: lib.y, name: 'Library saturation', line: { color: qcColors.umi, width: 2.6, shape: 'spline', smoothing: 1.1 } }
         ];

@@ -40,14 +40,15 @@ def generate_report(config):
         if str(Path(__file__).resolve().parents[1] / "src") not in sys.path:
             sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
         import report as report
+        from mfsflow.runtime import log_info, log_error
 
-        print(f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")} Generating HTML Report...', flush=True)
+        log_info('Generating HTML Report...')
         timing_path = os.path.join(logs_dir(config["out_dir"]), "pipeline_timing.tsv")
         report_timer = PipelineTimer(timing_path, config["project"])
         with report_timer.section("Report: HTML generation"):
             report.generate_multi_report(config["project"], config["out_dir"], config)
     except Exception as exc:
-        print(f"Error generating HTML report: {exc}", file=sys.stderr)
+        log_error(f"Error generating HTML report: {exc}")
 
 
 def main(argv=None):
@@ -62,25 +63,25 @@ def main(argv=None):
     from mfsflow.bootstrap import create_barcode_tables, create_output_dirs, process_fastq_inputs
     from mfsflow.config.validation import require_supported_python, validate_input_files
     from mfsflow.pipeline.runner import run_pipeline_stages
-    from mfsflow.runtime import format_duration
+    from mfsflow.runtime import format_duration, log_info
 
     require_supported_python()
 
-    print(f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")} Start analysis for {args.sample}.', flush=True)
+    log_info(f'Start analysis for {args.sample}.')
 
     script_dir = str(Path(__file__).resolve().parents[1])
     config, samplesheet_records = build_base_config(args, script_dir)
 
     create_output_dirs(config)
-    print(f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")} Directories created.', flush=True)
+    log_info('Directories created.')
 
     validate_input_files(config)
 
     process_fastq_inputs(config)
-    print(f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")} Fastq processed.', flush=True)
+    log_info('Fastq processed.')
 
     create_barcode_tables(config)
-    print(f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")} Barcode files created.', flush=True)
+    log_info('Barcode files created.')
 
     if config.get("barcode_source") == "samplesheet_barcode":
         expect_id_file = os.path.join(config["out_dir"], "config", "expect_id_barcode.tsv")
@@ -88,18 +89,14 @@ def main(argv=None):
 
     final_yaml_path = write_run_config(config)
 
-    print(f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")} Config generated: {final_yaml_path}', flush=True)
-    print(f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")} Starting Pipeline...', flush=True)
+    log_info(f'Config generated: {final_yaml_path}')
+    log_info('Starting Pipeline...')
 
     pipeline_start = time.perf_counter()
     run_pipeline_stages(final_yaml_path)
     pipeline_duration = time.perf_counter() - pipeline_start
 
-    print(
-        f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")} All analysis finished '
-        f"({format_duration(pipeline_duration)}).",
-        flush=True,
-    )
+    log_info(f'All analysis finished (Duration: {format_duration(pipeline_duration)}).')
 
     generate_report(config)
 

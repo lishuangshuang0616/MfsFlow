@@ -6,6 +6,7 @@ import os
 import subprocess
 
 from mfsflow.bootstrap import run_barcode_discovery
+from mfsflow.runtime import log_info
 from path_layout import barcode_dir, config_dir
 
 
@@ -42,7 +43,7 @@ def run_filtering_stage(runtime, timer, run_stage_cmd, run_log):
     runtime.install_src_path()
     import pipeline_modules
 
-    print(">>> Starting Filtering Stage")
+    log_info("Starting Filtering Stage")
 
     f1_str = config.get("sequence_files", {}).get("file1", {}).get("name", "")
     f2_str = config.get("sequence_files", {}).get("file2", {}).get("name", "")
@@ -77,8 +78,8 @@ def run_filtering_stage(runtime, timer, run_stage_cmd, run_log):
     if lines_per_chunk < 4000:
         lines_per_chunk = 4000
 
-    print(f"Total input estimation: {int(total_lines_est / 4)} reads.")
-    print(f"Split config: {split_parts} chunk parts, {lines_per_chunk} lines per chunk.")
+    log_info(f"Total input estimation: {int(total_lines_est / 4)} reads.")
+    log_info(f"Split config: {split_parts} chunk parts, {lines_per_chunk} lines per chunk.")
 
     with timer.section("Filtering: split FASTQ", f"parts={split_parts};lines_per_chunk={lines_per_chunk};threads={num_threads}"):
         pool = multiprocessing.Pool(processes=min(2, num_threads))
@@ -102,7 +103,7 @@ def run_filtering_stage(runtime, timer, run_stage_cmd, run_log):
 
         chunk_suffixes = results[0].get()
 
-    print(">>> Running fqfilter.py on chunks")
+    log_info("Running fqfilter.py on chunks")
     max_reads = config.get("counting_opts", {}).get("max_reads", 0)
 
     with timer.section("Filtering: fqfilter chunks", f"chunks={len(chunk_suffixes)}"):
@@ -111,7 +112,7 @@ def run_filtering_stage(runtime, timer, run_stage_cmd, run_log):
         threads_per_filter = max(1, num_threads // max_filter_jobs)
         fqfilter_pigz_threads = max(1, min(2, threads_per_filter // 2))
         fqfilter_samtools_threads = max(1, min(2, threads_per_filter - fqfilter_pigz_threads))
-        print(
+        log_info(
             "fqfilter parallel jobs: "
             f"{max_filter_jobs}; pigz threads/job: {fqfilter_pigz_threads}; "
             f"samtools threads/job: {fqfilter_samtools_threads}"
@@ -142,7 +143,7 @@ def run_filtering_stage(runtime, timer, run_stage_cmd, run_log):
         for proc in processes:
             wait_for_filter_process(proc)
 
-    print(">>> Cleaning up temporary FASTQ chunks...")
+    log_info("Cleaning up temporary FASTQ chunks...")
     with timer.section("Filtering: cleanup FASTQ chunks"):
         cleanup_candidates = (
             glob.glob(os.path.join(tmp_merge_path, "*.part_*"))
@@ -163,9 +164,9 @@ def run_filtering_stage(runtime, timer, run_stage_cmd, run_log):
                 continue
             os.remove(path)
             removed_chunks += 1
-        print(f"Removed temporary FASTQ chunks: {removed_chunks}")
+        log_info(f"Removed temporary FASTQ chunks: {removed_chunks}")
 
-    print(">>> Merging BAM Stats")
+    log_info("Merging BAM Stats")
     with timer.section("Filtering: merge BAM stats"):
         pipeline_modules.merge_bam_stats(tmp_merge_path, project, analysis_dir, yaml_file, samtools)
 
@@ -173,14 +174,14 @@ def run_filtering_stage(runtime, timer, run_stage_cmd, run_log):
     expect_id_barcode_file = os.path.join(config_dir(out_dir), "expect_id_barcode.tsv")
 
     if config.get("barcode_source") == "samplesheet_barcode":
-        print(">>> Samplesheet barcode mode: skipping barcode detection/binning")
+        log_info("Samplesheet barcode mode: skipping barcode detection/binning")
         bc_bin_for_correction = os.devnull
     else:
         if config.get("sample", {}).get("sample_type", "").lower() == "discover":
-            print(">>> Running Barcode Discovery")
+            log_info("Running Barcode Discovery")
             with timer.section("Filtering: barcode discovery"):
                 run_barcode_discovery(config, project, analysis_dir)
-        print(">>> Running Barcode Detection")
+        log_info("Running Barcode Detection")
         run_stage_cmd([python_exec, resolve_script("barcode_detection.py"), yaml_file], "BCdetection")
         bc_bin_for_correction = bc_bin_table
 
@@ -189,7 +190,7 @@ def run_filtering_stage(runtime, timer, run_stage_cmd, run_log):
     if config.get("barcode_source") == "samplesheet_barcode" or os.path.exists(bc_bin_table):
         stream_bc_correction = bool(config.get("performance_opts", {}).get("stream_bc_correction", True))
         if stream_bc_correction:
-            print(">>> Using streaming BC correction during Mapping")
+            log_info("Using streaming BC correction during Mapping")
             with timer.section("Filtering: prepare raw BAM chunks for streaming correction", f"chunks={len(chunk_suffixes)}"):
                 raw_chunks = []
                 for suffix in chunk_suffixes:
@@ -200,7 +201,7 @@ def run_filtering_stage(runtime, timer, run_stage_cmd, run_log):
                 umi_chunks = list(raw_chunks)
                 int_chunks = list(raw_chunks)
         else:
-            print(">>> Correcting BC Tags")
+            log_info("Correcting BC Tags")
             with timer.section("Filtering: correct BC tags", f"chunks={len(chunk_suffixes)}"):
                 correct_processes = []
 
@@ -238,6 +239,6 @@ def run_filtering_stage(runtime, timer, run_stage_cmd, run_log):
                     if os.path.exists(raw_bam):
                         os.remove(raw_bam)
 
-        print(">>> Skipping physical merge of chunks (will stream to STAR)...")
+        log_info("Skipping physical merge of chunks (will stream to STAR)...")
 
     return umi_chunks, int_chunks

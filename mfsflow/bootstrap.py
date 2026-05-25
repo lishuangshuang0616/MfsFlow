@@ -7,6 +7,7 @@ if os.path.isdir(_SRC_DIR) and _SRC_DIR not in sys.path:
     sys.path.insert(0, _SRC_DIR)
 
 from barcode_discovery import build_expected_records, discover_barcodes, write_expected_tables
+from mfsflow.runtime import log_info, log_error
 from path_layout import barcode_dir, config_dir, ensure_layout, outputs_dir
 
 
@@ -15,12 +16,12 @@ def create_output_dirs(config):
     outs_path = outputs_dir(out_path)
 
     if os.path.exists(out_path):
-        print(f"Warning: Processing directory '{out_path}' already exists. Resuming/Overwriting analysis.")
+        log_info(f"Warning: Processing directory '{out_path}' already exists. Resuming/Overwriting analysis.")
 
     ensure_layout(out_path)
 
-    print(f"Directory 'XPRESS_PROCESSING' (out_dir) created/verified at: {out_path}")
-    print(f"Directory 'outs' created/verified at: {outs_path}")
+    log_info(f"Directory 'XPRESS_PROCESSING' (out_dir) created/verified at: {out_path}")
+    log_info(f"Directory 'outs' created/verified at: {outs_path}")
 
 
 def create_barcode_tables(config):
@@ -30,7 +31,7 @@ def create_barcode_tables(config):
 
     if sample_type in ("custom", "external"):
         provided_bc = config["barcodes"]["barcode_file"]
-        print(f"Using custom barcode file: {provided_bc}")
+        log_info(f"Using custom barcode file: {provided_bc}")
         dest_summary = os.path.join(config_dir(out_path), "expect_id_barcode.tsv")
         dest_pipe = os.path.join(config_dir(out_path), "expect_barcode.tsv")
 
@@ -107,10 +108,10 @@ def run_barcode_discovery(config, project, analysis_dir):
         f"{candidate_type}={len(candidate_ids)}"
         for candidate_type, candidate_ids in sorted(checked.items())
     )
-    print(f">>> Barcode discovery checked candidate sets: {checked_label}")
-    print(f">>> Barcode discovery selected: {selected_label}")
-    print(f">>> Barcode discovery report: {report_file}")
-    print(f">>> Barcode tables updated: {summary_path}")
+    log_info(f"Barcode discovery checked candidate sets: {checked_label}")
+    log_info(f"Barcode discovery selected: {selected_label}")
+    log_info(f"Barcode discovery report: {report_file}")
+    log_info(f"Barcode tables updated: {summary_path}")
 
 
 def process_fastq_inputs(_config):

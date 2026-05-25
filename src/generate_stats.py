@@ -105,22 +105,29 @@ def plot_coverage(cov_umi, cov_int, out_prefix):
 
     sum_umi = float(np.sum(cov_umi))
     sum_int = float(np.sum(cov_int))
+    cov_all = cov_umi + cov_int
+    sum_all = float(np.sum(cov_all))
     # Avoid div by zero
     frac_umi = (cov_umi / sum_umi) if sum_umi > 0 else np.zeros_like(cov_umi, dtype=np.float64)
     frac_int = (cov_int / sum_int) if sum_int > 0 else np.zeros_like(cov_int, dtype=np.float64)
+    frac_all = (cov_all / sum_all) if sum_all > 0 else np.zeros_like(cov_all, dtype=np.float64)
 
     max_umi = float(np.max(cov_umi)) if cov_umi.size else 0.0
     max_int = float(np.max(cov_int)) if cov_int.size else 0.0
+    max_all = float(np.max(cov_all)) if cov_all.size else 0.0
     maxnorm_umi = (cov_umi / max_umi) if max_umi > 0 else np.zeros_like(cov_umi, dtype=np.float64)
     maxnorm_int = (cov_int / max_int) if max_int > 0 else np.zeros_like(cov_int, dtype=np.float64)
+    maxnorm_all = (cov_all / max_all) if max_all > 0 else np.zeros_like(cov_all, dtype=np.float64)
 
     maxnorm_umi_s = smooth(maxnorm_umi, window=7)
     maxnorm_int_s = smooth(maxnorm_int, window=7)
+    maxnorm_all_s = smooth(maxnorm_all, window=7)
 
     x = np.arange(1, 101)
 
     plt.figure(figsize=(10, 8))
-    plt.plot(x, maxnorm_int_s, label='Inter Coverage', color='blue', linewidth=2)
+    plt.plot(x, maxnorm_all_s, label='All Coverage', color='black', linewidth=2)
+    plt.plot(x, maxnorm_int_s, label='Internal Coverage', color='blue', linewidth=2)
     plt.plot(x, maxnorm_umi_s, label='UMI Coverage', color='red', linewidth=2)
 
     plt.ylim(0, 1.05)
@@ -135,9 +142,13 @@ def plot_coverage(cov_umi, cov_int, out_prefix):
     plt.close()
 
     with open(f"{out_prefix}.geneBodyCoverage.txt", 'w') as f:
-        f.write("Percentile\tUMI_Reads\tInternal_Reads\tUMI_Frac\tInternal_Frac\tUMI_MaxNorm\tInternal_MaxNorm\n")
+        f.write("Percentile\tUMI_Coverage\tInternal_Coverage\tAll_Coverage\tUMI_Frac\tInternal_Frac\tAll_Frac\tUMI_MaxNorm\tInternal_MaxNorm\tAll_MaxNorm\n")
         for i in range(100):
-            f.write(f"{i+1}\t{int(cov_umi[i])}\t{int(cov_int[i])}\t{frac_umi[i]:.6f}\t{frac_int[i]:.6f}\t{maxnorm_umi[i]:.6f}\t{maxnorm_int[i]:.6f}\n")
+            f.write(
+                f"{i+1}\t{cov_umi[i]:.6f}\t{cov_int[i]:.6f}\t{cov_all[i]:.6f}\t"
+                f"{frac_umi[i]:.6f}\t{frac_int[i]:.6f}\t{frac_all[i]:.6f}\t"
+                f"{maxnorm_umi[i]:.6f}\t{maxnorm_int[i]:.6f}\t{maxnorm_all[i]:.6f}\n"
+            )
 
 def plot_gene_umi_counts_by_type(stats_exon, stats_intron, stats_inex, wells, out_pdf):
     if not HAS_MATPLOTLIB: return
@@ -523,8 +534,8 @@ def main():
     stats_json_path = os.path.join(stats_output_dir, f"{project}.read_stats.json")
     
     read_stats = collections.defaultdict(lambda: collections.defaultdict(int))
-    cov_umi = np.zeros(100, dtype=np.int64)
-    cov_int = np.zeros(100, dtype=np.int64)
+    cov_umi = np.zeros(100, dtype=np.float64)
+    cov_int = np.zeros(100, dtype=np.float64)
     
     if os.path.exists(stats_json_path):
         print(f"Loading pre-calculated stats from {stats_json_path}")
@@ -539,9 +550,9 @@ def main():
             cov_int_list = data.get("coverage_int", [])
             
             if cov_umi_list:
-                cov_umi = np.array(cov_umi_list, dtype=np.int64)
+                cov_umi = np.array(cov_umi_list, dtype=np.float64)
             if cov_int_list:
-                cov_int = np.array(cov_int_list, dtype=np.int64)
+                cov_int = np.array(cov_int_list, dtype=np.float64)
     else:
         print("Warning: Pre-calculated stats not found. Plots will be missing.")
 

@@ -3,7 +3,7 @@ import sys
 
 import yaml
 
-from mfsflow.runtime import PipelineRuntime, PipelineTimer, Tee, run_stage_cmd as run_timed_stage_cmd
+from mfsflow.runtime import PipelineRuntime, PipelineTimer, Tee, run_stage_cmd as run_timed_stage_cmd, log_info
 from mfsflow.stages.counting import run_counting_stage
 from mfsflow.stages.filtering import run_filtering_stage
 from mfsflow.stages.mapping import run_mapping_stage
@@ -17,7 +17,7 @@ def run_pipeline_stages(yaml_file):
     This is intentionally still a compatibility runner. Stage internals will be
     moved into dedicated modules after the entrypoint has been thinned.
     """
-    print(f"Loading config from {yaml_file}...")
+    log_info(f"Loading config from {yaml_file}...")
     with open(yaml_file, "r") as handle:
         config = yaml.safe_load(handle)
 
@@ -35,11 +35,11 @@ def run_pipeline_stages(yaml_file):
     with open(log_path, "a") as run_log:
         sys.stdout = Tee(original_stdout, run_log)
         try:
-            print(f"Starting Pipeline for project: {runtime.project}")
-            print(f"Stage: {which_stage}")
+            log_info(f"Starting Pipeline for project: {runtime.project}")
+            log_info(f"Stage: {which_stage}")
             timer = PipelineTimer(timing_path, runtime.project)
-            print(f"Timing log: {timing_path}")
-            print(f"Temporary chunk directory: {runtime.tmp_merge_path}")
+            log_info(f"Timing log: {timing_path}")
+            log_info(f"Temporary chunk directory: {runtime.tmp_merge_path}")
 
             def run_stage_cmd(cmd, stage_name, shell=False):
                 run_timed_stage_cmd(cmd, stage_name, run_log, exec_env, timer, log_path, shell=shell)
@@ -61,6 +61,6 @@ def run_pipeline_stages(yaml_file):
             if which_stage in ["Filtering", "Mapping", "Counting", "Summarising"]:
                 run_statistics_stage(runtime, run_stage_cmd)
 
-            print("Pipeline Finished Successfully.")
+            log_info("Pipeline Finished Successfully.")
         finally:
             sys.stdout = original_stdout

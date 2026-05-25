@@ -1,5 +1,6 @@
 import copy
 import csv
+from datetime import datetime
 import gzip
 import glob
 import os
@@ -50,10 +51,11 @@ def configure_reads(config, fastq_pairs, has_samplesheet):
     config["sequence_files"]["file1"]["name"] = ",".join(r1 for r1, _r2 in fastq_pairs)
     config["sequence_files"]["file2"]["name"] = ",".join(r2 for _r1, r2 in fastq_pairs)
 
-    print("Detecting read lengths...")
+    ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    print(f"[{ts}] [INFO] Detecting read lengths...", flush=True)
     len_r1 = get_read_length(fastq_pairs[0][0])
     len_r2 = get_read_length(fastq_pairs[0][1])
-    print(f"Detected R1 Length: {len_r1}, R2 Length: {len_r2}")
+    print(f"[{ts}] [INFO] Detected R1 Length: {len_r1}, R2 Length: {len_r2}", flush=True)
 
     for r1_file, r2_file in fastq_pairs[1:]:
         cur_r1 = get_read_length(r1_file)

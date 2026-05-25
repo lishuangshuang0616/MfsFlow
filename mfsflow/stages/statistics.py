@@ -1,6 +1,6 @@
 import os
 
-from mfsflow.runtime import remove_path
+from mfsflow.runtime import remove_path, log_info
 
 
 def run_statistics_stage(runtime, run_stage_cmd):
@@ -8,7 +8,7 @@ def run_statistics_stage(runtime, run_stage_cmd):
     if str(config.get("make_stats", "yes")).lower() not in ["yes", "true"]:
         return
 
-    print(">>> Starting Statistics Stage")
+    log_info("Starting Statistics Stage")
     stats_cmd = [runtime.python_exec, runtime.resolve_script("generate_stats.py"), runtime.yaml_file]
     run_stage_cmd(stats_cmd, "Stats (Python)")
 

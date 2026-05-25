@@ -1,5 +1,6 @@
 import glob
 import os
+from mfsflow.runtime import log_info
 
 
 def run_mapping_stage(runtime, run_stage_cmd, umi_chunks=None, int_chunks=None):
@@ -11,7 +12,7 @@ def run_mapping_stage(runtime, run_stage_cmd, umi_chunks=None, int_chunks=None):
     yaml_file = runtime.yaml_file
     resolve_script = runtime.resolve_script
 
-    print(">>> Starting Mapping Stage")
+    log_info("Starting Mapping Stage")
 
     umi_chunks = list(umi_chunks or [])
     int_chunks = list(int_chunks or [])
@@ -27,13 +28,13 @@ def run_mapping_stage(runtime, run_stage_cmd, umi_chunks=None, int_chunks=None):
     else:
         disk_umi_chunks = find_chunks(f"{project}*.filtered.tagged.umi.bam")
         if disk_umi_chunks:
-            print(f"Found {len(disk_umi_chunks)} UMI chunks on disk.")
+            log_info(f"Found {len(disk_umi_chunks)} UMI chunks on disk.")
             umi_chunks = disk_umi_chunks
             umi_arg = ",".join(disk_umi_chunks)
         else:
             disk_raw_chunks = find_chunks(f"{project}*.raw.tagged.bam")
             if disk_raw_chunks:
-                print(f"Found {len(disk_raw_chunks)} raw tagged chunks on disk for streaming UMI correction.")
+                log_info(f"Found {len(disk_raw_chunks)} raw tagged chunks on disk for streaming UMI correction.")
                 umi_chunks = disk_raw_chunks
                 umi_arg = ",".join(disk_raw_chunks)
             else:
@@ -50,13 +51,13 @@ def run_mapping_stage(runtime, run_stage_cmd, umi_chunks=None, int_chunks=None):
     else:
         disk_int_chunks = find_chunks(f"{project}*.filtered.tagged.internal.bam")
         if disk_int_chunks:
-            print(f"Found {len(disk_int_chunks)} Internal chunks on disk.")
+            log_info(f"Found {len(disk_int_chunks)} Internal chunks on disk.")
             int_chunks = disk_int_chunks
             int_arg = ",".join(disk_int_chunks)
         else:
             disk_raw_chunks = find_chunks(f"{project}*.raw.tagged.bam")
             if disk_raw_chunks:
-                print(f"Found {len(disk_raw_chunks)} raw tagged chunks on disk for streaming internal correction.")
+                log_info(f"Found {len(disk_raw_chunks)} raw tagged chunks on disk for streaming internal correction.")
                 int_chunks = disk_raw_chunks
                 int_arg = ",".join(disk_raw_chunks)
             else:

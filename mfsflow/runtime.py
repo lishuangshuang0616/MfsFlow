@@ -7,6 +7,14 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime
 
+def log_info(msg):
+    ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    print(f"[{ts}] [INFO] {msg}", flush=True)
+
+def log_error(msg):
+    ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    print(f"[{ts}] [ERROR] {msg}", file=sys.stderr, flush=True)
+
 _SRC_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "src")
 if os.path.isdir(_SRC_DIR) and _SRC_DIR not in sys.path:
     sys.path.insert(0, _SRC_DIR)
@@ -62,18 +70,17 @@ class PipelineTimer:
     @contextmanager
     def section(self, stage, details=""):
         start = time.perf_counter()
-        print(f"[TIMING] START {stage}")
         try:
             yield
         except Exception:
             duration = time.perf_counter() - start
             self.record(stage, "failed", duration, details)
-            print(f"[TIMING] FAIL  {stage}: {format_duration(duration)}")
+            log_error(f"Failed {stage} (Duration: {format_duration(duration)})")
             raise
         else:
             duration = time.perf_counter() - start
             self.record(stage, "ok", duration, details)
-            print(f"[TIMING] DONE  {stage}: {format_duration(duration)}")
+            log_info(f"Finished {stage} (Duration: {format_duration(duration)})")
 
 
 @dataclass
@@ -173,19 +180,17 @@ def run_stage_cmd(cmd, stage_name, run_log, exec_env, timer, log_path, shell=Fal
     else:
         cmd_str = str(cmd)
     start = time.perf_counter()
-    print(f"[TIMING] START {stage_name}")
     res = subprocess.run(cmd, stdout=run_log, stderr=subprocess.STDOUT, shell=shell, env=exec_env)
     duration = time.perf_counter() - start
     if res.returncode != 0:
         timer.record(stage_name, "failed", duration, cmd_str)
-        print(f"[TIMING] FAIL  {stage_name}: {format_duration(duration)}")
+        log_error(f"Failed {stage_name} (Duration: {format_duration(duration)})")
         run_log.flush()
         try:
             with open(log_path, "r") as lr:
-                print(f"\n[ERROR] {stage_name} failed (rc={res.returncode}). Last 30 lines of log ({log_path}):\n", file=sys.stderr)
-                print("".join(lr.readlines()[-30:]), file=sys.stderr)
+                log_error(f"{stage_name} failed (rc={res.returncode}). Last 30 lines of log ({log_path}):\n" + "".join(lr.readlines()[-30:]))
         except Exception:
             pass
         raise RuntimeError(f"{stage_name} failed with exit code {res.returncode}.")
     timer.record(stage_name, "ok", duration, cmd_str)
-    print(f"[TIMING] DONE  {stage_name}: {format_duration(duration)}")
+    log_info(f"Finished {stage_name} (Duration: {format_duration(duration)})")

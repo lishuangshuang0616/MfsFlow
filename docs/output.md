@@ -385,13 +385,19 @@ Saturation analysis results at different downsampling levels.
 - `num_umis_median`: Median number of UMIs per cell
 
 ### gene_body_coverage.tsv
-Gene body coverage profile.
+RSeQC-like gene body coverage profile.
 
-**Purpose**: 5' to 3' coverage bias analysis.
+**Purpose**: 5' to 3' coverage bias analysis. The pipeline selects the longest
+transcript per gene from the GTF, splits the transcript body into 100 bins in
+5' to 3' orientation, and projects primary aligned reads onto those bins.
+UMI and Internal reads are tracked separately, with an additional combined
+All-read profile in the text/PDF outputs.
 
 **Format**: TSV with columns:
-- `percentile`: Gene body percentile (0-100)
-- `coverage`: Average coverage at this percentile
+- `Percentile`: Gene body percentile (1-100)
+- `UMI_Coverage`, `Internal_Coverage`, `All_Coverage`: Bin-normalized coverage
+- `UMI_Frac`, `Internal_Frac`, `All_Frac`: Fractional coverage profiles
+- `UMI_MaxNorm`, `Internal_MaxNorm`, `All_MaxNorm`: Max-normalized profiles used for plotting
 
 ### q30_stats.tsv
 Base quality statistics.

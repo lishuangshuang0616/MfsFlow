@@ -1,6 +1,6 @@
 import os
 
-from mfsflow.runtime import remove_path
+from mfsflow.runtime import remove_path, log_info
 
 
 def run_counting_stage(runtime, run_stage_cmd):
@@ -12,7 +12,7 @@ def run_counting_stage(runtime, run_stage_cmd):
     resolve_script = runtime.resolve_script
     config = runtime.config
 
-    print(">>> Starting Counting Stage")
+    log_info("Starting Counting Stage")
 
     umi_aligned = os.path.join(analysis_dir, f"{project}.filtered.tagged.umi.Aligned.out.bam")
     int_aligned = os.path.join(analysis_dir, f"{project}.filtered.tagged.internal.Aligned.out.bam")
@@ -35,7 +35,7 @@ def run_counting_stage(runtime, run_stage_cmd):
     remove_path(umi_to_tx)
     remove_path(int_to_tx)
 
-    print(">>> Starting DGE Analysis (Python)")
+    log_info("Starting DGE Analysis (Python)")
     dge_cmd = [python_exec, resolve_script("dge_analysis.py"), yaml_file, samtools]
     run_stage_cmd(dge_cmd, "dge_analysis.py")
 
