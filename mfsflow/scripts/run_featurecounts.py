@@ -9,6 +9,7 @@ import json
 import collections
 import gzip
 import glob
+import hashlib
 
 from path_layout import expression_dir, stats_dir
 
@@ -46,6 +47,38 @@ def get_bam_chromosomes(bam_file, samtools_exec='samtools'):
     except subprocess.CalledProcessError:
         print(f"Warning: Could not read header from {bam_file}")
         return set()
+
+
+def estimate_primary_mapped_reads(bam_file, samtools_exec='samtools'):
+    """Count primary mapped alignments for coverage sampling fraction estimation."""
+    try:
+        output = subprocess.check_output(
+            [samtools_exec, "view", "-c", "-F", "2308", bam_file],
+            text=True,
+        )
+        return int(str(output).strip() or 0)
+    except Exception as exc:
+        print(f"Warning: Could not estimate mapped read count for {bam_file}: {exc}")
+        return 0
+
+
+def coverage_sampling_fraction(total_reads, target_reads):
+    if not target_reads or int(target_reads) <= 0:
+        return 1.0
+    total_reads = int(total_reads or 0)
+    if total_reads <= 0:
+        return 1.0
+    return min(1.0, float(target_reads) / float(total_reads))
+
+
+def should_sample_for_coverage(read_name, sample_fraction, seed=42, source_label=None):
+    if sample_fraction >= 1.0:
+        return True
+    if sample_fraction <= 0:
+        return False
+    key = f"{seed}|{source_label or ''}|{read_name or ''}".encode("utf-8", errors="ignore")
+    value = int.from_bytes(hashlib.blake2b(key, digest_size=8).digest(), "big")
+    return (value / float(1 << 64)) < sample_fraction
 
 def load_gene_models(gtf_file):
     """
@@ -823,6 +856,8 @@ def process_bam_and_calculate_stats(
     intron_index=None,
     intron_starts=None,
     strand_mode=0,
+    coverage_sample_fraction=1.0,
+    coverage_sample_seed=42,
 ):
     """
     Processes a single BAM from Combined SAF featureCounts.
@@ -837,7 +872,6 @@ def process_bam_and_calculate_stats(
     read_stats = collections.defaultdict(lambda: collections.defaultdict(int))
     cov_arr = [0] * 100
     cov_count = 0
-    MAX_COV_READS = 5000000
     intron_index = intron_index or {}
     intron_starts = intron_starts or {}
 
@@ -877,10 +911,14 @@ def process_bam_and_calculate_stats(
             parts = read_obj.split('\t')
             if len(parts) < 6 or parts[2] == "*" or parts[5] == "*":
                 return False
+            if not should_sample_for_coverage(parts[0], coverage_sample_fraction, coverage_sample_seed, source_label):
+                return False
             chrom = parts[2]
             blocks = _sam_line_blocks_1based_half_open(parts)
         else:
             if not should_count_read(read_obj) or read_obj.is_unmapped:
+                return False
+            if not should_sample_for_coverage(read_obj.query_name, coverage_sample_fraction, coverage_sample_seed, source_label):
                 return False
             chrom = read_obj.reference_name
             blocks = _pysam_blocks_1based_half_open(read_obj)
@@ -999,9 +1037,8 @@ def process_bam_and_calculate_stats(
 
                     # Stats
                     update_stats(final_read, category, source_label)
-                    if collect_coverage and cov_count < MAX_COV_READS:
-                        if update_coverage(final_read, gene_models, cov_arr):
-                            cov_count += 1
+                    if collect_coverage and update_coverage(final_read, gene_models, cov_arr):
+                        cov_count += 1
 
                     f_out.write(final_read)
             finally:
@@ -1111,9 +1148,8 @@ def process_bam_and_calculate_stats(
 
             # Stats
             update_stats(final_line, category, source_label)
-            if collect_coverage and cov_count < MAX_COV_READS:
-                 if update_coverage(final_line, gene_models, cov_arr):
-                     cov_count += 1
+            if collect_coverage and update_coverage(final_line, gene_models, cov_arr):
+                 cov_count += 1
 
             proc_out.stdin.write(final_line + "\n")
 
@@ -1268,6 +1304,8 @@ def main():
     total_cov_int = [0] * 100
     total_cov_umi_reads = 0
     total_cov_int_reads = 0
+    total_cov_umi_fraction = 1.0
+    total_cov_int_fraction = 1.0
 
     def merge_stats(dest_stats, src_stats):
         for bc, counts in src_stats.items():
@@ -1284,11 +1322,14 @@ def main():
     use_r_order = featurecounts_strategy in {"r", "r_order", "two_pass", "exact"}
     fraction_overlap = counting_opts.get("fraction_overlap", 0)
     allow_multi_overlap = bool(counting_opts.get("multi_overlap", False))
+    gene_body_max_reads = int(counting_opts.get("gene_body_max_reads", 5000000) or 0)
+    gene_body_sample_seed = int(counting_opts.get("gene_body_sample_seed", 42) or 42)
     umi_strand_mode, internal_strand_mode = resolve_counting_strand_modes(counting_opts)
     print(
         f"featureCounts opts: strategy={featurecounts_strategy}, "
         f"multi_overlap={allow_multi_overlap}, fraction_overlap={fraction_overlap}, "
-        f"read_layout={read_layout}, umi_strand={umi_strand_mode}, internal_strand={internal_strand_mode}"
+        f"read_layout={read_layout}, umi_strand={umi_strand_mode}, internal_strand={internal_strand_mode}, "
+        f"gene_body_max_reads={gene_body_max_reads}, gene_body_sample_seed={gene_body_sample_seed}"
     )
     intron_index, intron_starts = ({}, {})
     if count_introns and not use_r_order:
@@ -1382,40 +1423,60 @@ def main():
         with pysam.AlignmentFile(fc_outputs[0][1], "rb", threads=int(num_threads)) as template_in:
             with pysam.AlignmentFile(final_bam, "wb", template=template_in, threads=int(num_threads)) as final_out:
                 for source_label, fc_bam, fc_strand_mode in fc_outputs:
+                    mapped_for_cov = estimate_primary_mapped_reads(fc_bam, samtools_exec) if collect_coverage else 0
+                    cov_fraction = coverage_sampling_fraction(mapped_for_cov, gene_body_max_reads)
+                    print(
+                        f"Gene body coverage sampling ({source_label}): "
+                        f"mapped={mapped_for_cov}, fraction={cov_fraction:.6f}"
+                    )
                     r_stats, cov, cov_reads = process_bam_and_calculate_stats(
                         fc_bam, final_bam, samtools_exec, num_threads,
                         gene_map, source_label=source_label, gene_models=gene_models,
                         collect_coverage=collect_coverage, output_handle=final_out,
                         intron_index=intron_index, intron_starts=intron_starts,
                         strand_mode=fc_strand_mode,
+                        coverage_sample_fraction=cov_fraction,
+                        coverage_sample_seed=gene_body_sample_seed,
                     )
                     merge_stats(total_read_stats, r_stats)
                     if source_label == "UMI":
                         merge_coverage(total_cov_umi, cov)
                         total_cov_umi_reads += cov_reads
+                        total_cov_umi_fraction = cov_fraction
                     else:
                         merge_coverage(total_cov_int, cov)
                         total_cov_int_reads += cov_reads
+                        total_cov_int_fraction = cov_fraction
                     os.remove(fc_bam)
     else:
         print("pysam unavailable for direct final BAM writing; falling back to intermediate BAM merge.")
         bams_to_merge = []
         for source_label, fc_bam, fc_strand_mode in fc_outputs:
             processed_bam = fc_bam + ".processed.bam"
+            mapped_for_cov = estimate_primary_mapped_reads(fc_bam, samtools_exec) if collect_coverage else 0
+            cov_fraction = coverage_sampling_fraction(mapped_for_cov, gene_body_max_reads)
+            print(
+                f"Gene body coverage sampling ({source_label}): "
+                f"mapped={mapped_for_cov}, fraction={cov_fraction:.6f}"
+            )
             r_stats, cov, cov_reads = process_bam_and_calculate_stats(
                 fc_bam, processed_bam, samtools_exec, num_threads,
                 gene_map, source_label=source_label, gene_models=gene_models,
                 collect_coverage=collect_coverage,
                 intron_index=intron_index, intron_starts=intron_starts,
                 strand_mode=fc_strand_mode,
+                coverage_sample_fraction=cov_fraction,
+                coverage_sample_seed=gene_body_sample_seed,
             )
             merge_stats(total_read_stats, r_stats)
             if source_label == "UMI":
                 merge_coverage(total_cov_umi, cov)
                 total_cov_umi_reads += cov_reads
+                total_cov_umi_fraction = cov_fraction
             else:
                 merge_coverage(total_cov_int, cov)
                 total_cov_int_reads += cov_reads
+                total_cov_int_fraction = cov_fraction
             os.remove(fc_bam)
             bams_to_merge.append(processed_bam)
 
@@ -1441,7 +1502,11 @@ def main():
         "coverage_umi": total_cov_umi,
         "coverage_int": total_cov_int,
         "coverage_umi_reads": total_cov_umi_reads,
-        "coverage_internal_reads": total_cov_int_reads
+        "coverage_internal_reads": total_cov_int_reads,
+        "coverage_umi_sample_fraction": total_cov_umi_fraction,
+        "coverage_internal_sample_fraction": total_cov_int_fraction,
+        "coverage_sample_seed": gene_body_sample_seed,
+        "coverage_target_reads": gene_body_max_reads
     }
     with open(stats_out, 'w') as f:
         json.dump(stats_data, f)

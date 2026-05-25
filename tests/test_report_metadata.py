@@ -4,9 +4,13 @@ import tempfile
 import unittest
 from pathlib import Path
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from report import _infer_transcriptome_label, export_deliverables_to_outs
+from mfsflow.report import (
+    _process_sequencing_quality_data,
+    _infer_transcriptome_label,
+    export_deliverables_to_outs,
+)
 
 
 class ReportMetadataTests(unittest.TestCase):
@@ -63,6 +67,65 @@ class ReportMetadataTests(unittest.TestCase):
             self.assertFalse((stats / "Sample01.stats.tsv").exists())
             self.assertFalse((outdir / "Sample01.filtered.Aligned.GeneTagged.UBcorrected.sorted.bam").exists())
             self.assertFalse((config / "run_config.yaml").exists())
+
+    def test_sequencing_quality_summary_uses_q30_and_bcstats(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            outdir = Path(tmpdir) / "XPRESS_PROCESSING"
+            stats = outdir / "stats"
+            stats.mkdir(parents=True)
+            (outdir / "sample.BCstats.txt").write_text("AAAA\t60\nCCCC\t40\n")
+            (stats / "sample.q30_stats.tsv").write_text(
+                "metric\ttotal_bases\tq30_bases\tq30_rate\n"
+                "R1\t9000\t8100\t0.900000\n"
+                "BC\t2000\t1800\t0.900000\n"
+                "UMI\t1000\t950\t0.950000\n"
+                "R1_cDNA\t8000\t7200\t0.900000\n"
+                "R2_cDNA\t9000\t7650\t0.850000\n"
+            )
+            context = {
+                "_run_config": {
+                    "sequence_files": {
+                        "file1": {"base_definition": ["cDNA(11-90)", "UMI(1-10)"]},
+                        "file2": {"base_definition": ["cDNA(1-90)", "BC(91-110)"]},
+                    }
+                }
+            }
+
+            _process_sequencing_quality_data(outdir, context)
+
+            self.assertIn('"Total sequencing reads", "value": "100"', context["sequencing_quality_summary_data"])
+            self.assertIn('"Valid barcode reads", "value": "100"', context["sequencing_quality_summary_data"])
+            self.assertIn('"Unused barcode reads", "value": "0"', context["sequencing_quality_summary_data"])
+            self.assertIn('"Valid barcode rate", "value": "100.0%"', context["sequencing_quality_summary_data"])
+            self.assertIn('"Read2 cDNA Q30", "value": "85.0%"', context["sequencing_quality_summary_data"])
+
+    def test_sequencing_quality_summary_prefers_read_stats_counts(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            outdir = Path(tmpdir) / "XPRESS_PROCESSING"
+            stats = outdir / "stats"
+            stats.mkdir(parents=True)
+            (outdir / "sample.BCstats.txt").write_text("AAAA\t999\n")
+            (stats / "sample.q30_stats.tsv").write_text(
+                "metric\ttotal_bases\tq30_bases\tq30_rate\n"
+                "R1\t9000\t8100\t0.900000\n"
+            )
+            (stats / "sample.read_stats.json").write_text(
+                '{"read_stats": {"BC1": {"UMI_Reads": 10, "Internal_Reads": 5}, "__NO_CB__": {"Unused BC": 5}}}'
+            )
+            context = {
+                "_run_config": {
+                    "sequence_files": {
+                        "file1": {"base_definition": ["cDNA(11-90)", "UMI(1-10)"]},
+                    }
+                }
+            }
+
+            _process_sequencing_quality_data(outdir, context)
+
+            self.assertIn('"Total sequencing reads", "value": "20"', context["sequencing_quality_summary_data"])
+            self.assertIn('"Valid barcode reads", "value": "15"', context["sequencing_quality_summary_data"])
+            self.assertIn('"Unused barcode reads", "value": "5"', context["sequencing_quality_summary_data"])
+            self.assertIn('"Valid barcode rate", "value": "75.0%"', context["sequencing_quality_summary_data"])
 
 
 if __name__ == "__main__":

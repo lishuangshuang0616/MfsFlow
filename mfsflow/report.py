@@ -51,6 +51,7 @@ _JSON_ARRAY_PLACEHOLDERS = {
     "barcode_mode_cards_data",
     "manual_barcode_table_data",
     "auto_plate_summary_data",
+    "sequencing_quality_summary_data",
 }
 
 _JSON_OBJECT_PLACEHOLDERS = {
@@ -146,6 +147,132 @@ def _fmt_pct(value):
     if n is None:
         return ""
     return f"{n * 100.0:.1f}%"
+
+
+def _format_quality_value(value, value_type):
+    if value is None:
+        return "NA"
+    if value_type == "pct":
+        return _fmt_pct(value) or "NA"
+    if value_type == "int":
+        return _fmt_int(value) or "NA"
+    return str(value)
+
+
+def _max_end_from_base_definition(definition):
+    if isinstance(definition, str):
+        parts = definition.split(";")
+    elif isinstance(definition, list):
+        parts = definition
+    else:
+        parts = []
+    max_end = None
+    for part in parts:
+        for _name, body in re.findall(r"(\w+)\(([^)]*)\)", str(part)):
+            for rng in str(body).split(","):
+                rng = rng.strip()
+                if "-" not in rng:
+                    continue
+                try:
+                    end = int(rng.split("-", 1)[1])
+                except Exception:
+                    continue
+                max_end = end if max_end is None else max(max_end, end)
+    return max_end
+
+
+def _configured_read_length(config, file_key):
+    seq_files = (config or {}).get("sequence_files", {}) or {}
+    entry = seq_files.get(file_key, {}) if isinstance(seq_files, dict) else {}
+    return _max_end_from_base_definition(entry.get("base_definition", []))
+
+
+def _load_q30_rows(sample_outdir):
+    candidates = list(Path(stats_dir(str(sample_outdir))).glob("*.q30_stats.tsv"))
+    if not candidates:
+        candidates = list(Path(sample_outdir).rglob("*.q30_stats.tsv"))
+    if not candidates:
+        return {}
+    rows = {}
+    with open(candidates[0], "r", encoding="utf-8", errors="ignore", newline="") as handle:
+        for row in csv.DictReader(handle, delimiter="\t"):
+            metric = str(row.get("metric") or "").strip()
+            if not metric:
+                continue
+            rows[metric] = {
+                "total_bases": _to_float(row.get("total_bases")),
+                "q30_bases": _to_float(row.get("q30_bases")),
+                "q30_rate": _to_float(row.get("q30_rate")),
+            }
+    return rows
+
+
+def _sum_bcstats_reads(sample_outdir):
+    candidates = [Path(sample_outdir) / f"{Path(sample_outdir).name}.BCstats.txt"]
+    candidates.extend(sorted(Path(sample_outdir).glob("*.BCstats.txt")))
+    candidates.extend(sorted(Path(sample_outdir).rglob("*.BCstats.txt")))
+    seen = set()
+    for path in candidates:
+        if path in seen or not path.exists() or not path.is_file():
+            continue
+        seen.add(path)
+        total = 0
+        with open(path, "r", encoding="utf-8", errors="ignore") as handle:
+            for line in handle:
+                parts = line.strip().split()
+                if len(parts) < 2:
+                    continue
+                try:
+                    total += int(parts[1])
+                except Exception:
+                    continue
+        if total > 0:
+            return total
+    return None
+
+
+def _load_read_stats_json(sample_outdir):
+    candidates = list(Path(stats_dir(str(sample_outdir))).glob("*.read_stats.json"))
+    if not candidates:
+        candidates = list(Path(sample_outdir).rglob("*.read_stats.json"))
+    if not candidates:
+        return {}
+    with open(candidates[0], "r", encoding="utf-8", errors="ignore") as handle:
+        data = json.load(handle)
+    return data.get("read_stats", {}) or {}
+
+
+def _read_count_from_read_stats_bucket(counts):
+    if not isinstance(counts, dict):
+        return 0
+    umi_reads = _to_float(counts.get("UMI_Reads"))
+    internal_reads = _to_float(counts.get("Internal_Reads"))
+    if umi_reads is not None or internal_reads is not None:
+        return int((umi_reads or 0) + (internal_reads or 0))
+
+    total = 0
+    for key, value in counts.items():
+        if key in {"UMI_Reads", "Internal_Reads"}:
+            continue
+        numeric = _to_float(value)
+        if numeric is not None:
+            total += int(numeric)
+    return total
+
+
+def _barcode_read_counts_from_read_stats(read_stats):
+    if not isinstance(read_stats, dict) or not read_stats:
+        return None, None, None, None
+    valid_reads = 0
+    for barcode, counts in read_stats.items():
+        if not isinstance(barcode, str) or barcode.startswith("__"):
+            continue
+        valid_reads += _read_count_from_read_stats_bucket(counts)
+
+    unused_reads = int(_to_float((read_stats.get("__NO_CB__", {}) or {}).get("Unused BC")) or 0)
+    total_reads = valid_reads + unused_reads
+    valid_rate = (valid_reads / total_reads) if total_reads else None
+    return total_reads, valid_reads, unused_reads, valid_rate
 
 
 def _infer_transcriptome_label(reference_config):
@@ -775,10 +902,51 @@ def _process_rna_data(omics_data, sample_outdir, combined_context):
     _process_barcode_report_data(sample_outdir, combined_context, combined_context.get("_run_config", {}))
     _process_rna_saturation_data(sample_outdir, combined_context)
     _process_rna_gene_body_coverage_data(sample_outdir, combined_context)
+    _process_sequencing_quality_data(sample_outdir, combined_context)
     _process_rna_read_distribution_data(sample_outdir, combined_context)
     _process_rna_bead_count_data(sample_outdir, combined_context)
     _process_rna_cluster_assignment(sample_outdir, combined_context)
     _process_rna_rankplot_data(sample_outdir, combined_context)
+
+
+def _process_sequencing_quality_data(sample_outdir, combined_context):
+    combined_context["sequencing_quality_summary_data"] = "[]"
+    try:
+        config = combined_context.get("_run_config", {}) or {}
+        q30_rows = _load_q30_rows(sample_outdir)
+        read_stats = _load_read_stats_json(sample_outdir)
+
+        total_reads, valid_bc_reads, unused_bc_reads, valid_bc_rate = _barcode_read_counts_from_read_stats(read_stats)
+        if total_reads is None:
+            r1_len = _configured_read_length(config, "file1")
+            r1_total_bases = (q30_rows.get("R1") or {}).get("total_bases")
+            total_reads = int(round(r1_total_bases / r1_len)) if r1_len and r1_total_bases else None
+            valid_bc_reads = _sum_bcstats_reads(sample_outdir)
+            unused_bc_reads = (total_reads - valid_bc_reads) if total_reads is not None and valid_bc_reads is not None else None
+            valid_bc_rate = (valid_bc_reads / total_reads) if total_reads and valid_bc_reads is not None else None
+
+        metric_map = [
+            ("Total sequencing reads", total_reads, "int"),
+            ("Valid barcode reads", valid_bc_reads, "int"),
+            ("Unused barcode reads", unused_bc_reads, "int"),
+            ("Valid barcode rate", valid_bc_rate, "pct"),
+            ("Cell barcode Q30", (q30_rows.get("BC") or {}).get("q30_rate"), "pct"),
+            ("UMI Q30", (q30_rows.get("UMI") or {}).get("q30_rate"), "pct"),
+            ("Read1 cDNA Q30", (q30_rows.get("R1_cDNA") or {}).get("q30_rate"), "pct"),
+            ("Read2 cDNA Q30", (q30_rows.get("R2_cDNA") or {}).get("q30_rate"), "pct"),
+        ]
+        payload = [
+            {
+                "metric": label,
+                "value": _format_quality_value(value, value_type),
+                "raw": value,
+                "type": value_type,
+            }
+            for label, value, value_type in metric_map
+        ]
+        combined_context["sequencing_quality_summary_data"] = json.dumps(payload)
+    except Exception as e:
+        print(f"Warning: Failed to prepare sequencing quality summary data: {e}")
 
 def _process_rna_stats_table_data(sample_outdir, combined_context):
     combined_context['rna_stats_table_data'] = '[]'

@@ -55,7 +55,9 @@ DEFAULT_CONFIG = {
         "Ham_Dist": 1,
         "velocyto": False,
         "primaryHit": True,
-        "twoPass": False
+        "twoPass": False,
+        "gene_body_max_reads": 5000000,
+        "gene_body_sample_seed": 42
     },
     "performance_opts": {
         "stream_bc_correction": True,

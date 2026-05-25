@@ -61,6 +61,9 @@ ${plotly_loader_tag}
     }
     .grid { display: grid; gap: 14px; }
     .cards { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); margin-top: 14px; }
+    .quality-cards { grid-template-columns: repeat(auto-fit, minmax(145px, 1fr)); margin-top: 10px; }
+    .quality-cards .card { padding: 12px 14px; box-shadow: none; }
+    .quality-cards .card-value { font-size: 18px; }
     .two { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
     .curve-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); justify-content: stretch; }
     .panel {
@@ -341,6 +344,12 @@ ${plotly_loader_tag}
             <div class="card"><div class="card-value">${rna_species}</div><div class="card-label">Transcriptome</div></div>
             <div class="card"><div class="card-value">${rna_total_gene}</div><div class="card-label">Genes in matrix</div></div>
             <div class="card"><div class="card-value">${rna_saturation}</div><div class="card-label">Final saturation</div></div>
+            <div class="card"><div class="card-value" id="run-total-reads">NA</div><div class="card-label">Total sequencing reads</div></div>
+            <div class="card"><div class="card-value" id="run-valid-barcode-rate">NA</div><div class="card-label">Valid barcode rate</div></div>
+        </div>
+        <h3 style="margin-top: 18px;">Sequencing Quality</h3>
+        <div class="grid quality-cards" id="q30-cards">
+            <div class="card"><div class="card-value">NA</div><div class="card-label">No Q30 data</div></div>
         </div>
         <details>
             <summary>Configuration</summary>
@@ -364,6 +373,7 @@ ${plotly_loader_tag}
     const geneBodyX = parseJson('${rna_gene_body_percentile}', []);
     const geneBodyUmi = parseJson('${rna_gene_body_umi_maxnorm}', []);
     const geneBodyInt = parseJson('${rna_gene_body_internal_maxnorm}', []);
+    const sequencingQuality = parseJson('${sequencing_quality_summary_data}', []);
 
     function parseJson(raw, fallback) {
         try {
@@ -810,6 +820,28 @@ ${plotly_loader_tag}
             legend: { orientation: 'v', x: .98, y: .98, xanchor: 'right', yanchor: 'top', bgcolor: 'rgba(255,255,255,0.75)' }
         }), { responsive: true, displayModeBar: false });
     }
+    function qualityValue(metric) {
+        const row = sequencingQuality.find(function(item) { return String(item.metric || '') === metric; });
+        return row ? String(row.value || 'NA') : 'NA';
+    }
+    function renderSequencingQuality() {
+        const totalReads = el('run-total-reads');
+        const validRate = el('run-valid-barcode-rate');
+        if (totalReads) totalReads.textContent = qualityValue('Total sequencing reads');
+        if (validRate) validRate.textContent = qualityValue('Valid barcode rate');
+
+        const target = el('q30-cards');
+        if (!target) return;
+        const rows = [
+            ['Cell barcode Q30', qualityValue('Cell barcode Q30')],
+            ['UMI Q30', qualityValue('UMI Q30')],
+            ['Read1 cDNA Q30', qualityValue('Read1 cDNA Q30')],
+            ['Read2 cDNA Q30', qualityValue('Read2 cDNA Q30')]
+        ];
+        target.innerHTML = rows.map(function(row) {
+            return '<div class="card"><div class="card-value">' + row[1] + '</div><div class="card-label">' + row[0] + '</div></div>';
+        }).join('');
+    }
     function renderStatsTable() {
         const table = el('stats-table');
         const count = el('stats-count');
@@ -954,6 +986,7 @@ ${plotly_loader_tag}
     renderMetricScatter();
     renderSaturation();
     renderGeneBody();
+    renderSequencingQuality();
     renderStatsTable();
 })();
 </script>

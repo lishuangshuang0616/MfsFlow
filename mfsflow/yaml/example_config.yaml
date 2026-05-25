@@ -79,6 +79,8 @@ counting_opts:
   velocyto: no #Would you like velocyto to do counting of intron-exon spanning reads
   primaryHit: yes #Do you want to count the primary Hits of multimapping reads towards gene expression levels?
   twoPass: no #perform basic STAR twoPass mapping
+  gene_body_max_reads: 5000000 #Target number of primary mapped reads sampled for gene body coverage per read source. 0 disables downsampling.
+  gene_body_sample_seed: 42 #Stable hash seed for unbiased gene body coverage sampling.
 
 #produce stats files and plots?
 make_stats: yes

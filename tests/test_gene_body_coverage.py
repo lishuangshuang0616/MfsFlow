@@ -5,7 +5,13 @@ import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from run_featurecounts import _project_blocks_to_gene_body, _pysam_blocks_1based_half_open, load_gene_models
+from run_featurecounts import (
+    _project_blocks_to_gene_body,
+    _pysam_blocks_1based_half_open,
+    coverage_sampling_fraction,
+    load_gene_models,
+    should_sample_for_coverage,
+)
 
 
 class GeneBodyCoverageTests(unittest.TestCase):
@@ -51,6 +57,19 @@ class GeneBodyCoverageTests(unittest.TestCase):
             [(1, 101), (151, 176)],
             _pysam_blocks_1based_half_open(DummyRead()),
         )
+
+    def test_coverage_sampling_fraction_targets_max_reads(self):
+        self.assertEqual(1.0, coverage_sampling_fraction(100, 500))
+        self.assertEqual(0.5, coverage_sampling_fraction(1000, 500))
+        self.assertEqual(1.0, coverage_sampling_fraction(0, 500))
+        self.assertEqual(1.0, coverage_sampling_fraction(1000, 0))
+
+    def test_coverage_sampling_is_stable_by_read_name(self):
+        first = should_sample_for_coverage("readA", 0.25, seed=42, source_label="UMI")
+        second = should_sample_for_coverage("readA", 0.25, seed=42, source_label="UMI")
+        self.assertEqual(first, second)
+        self.assertTrue(should_sample_for_coverage("readA", 1.0, seed=42))
+        self.assertFalse(should_sample_for_coverage("readA", 0.0, seed=42))
 
 
 if __name__ == "__main__":
