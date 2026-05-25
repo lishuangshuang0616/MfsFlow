@@ -22,7 +22,6 @@ def run_pipeline_stages(yaml_file):
         config = yaml.safe_load(handle)
 
     runtime = PipelineRuntime.from_config(config, yaml_file)
-    runtime.install_src_path()
 
     which_stage = runtime.which_stage
     exec_env = runtime.exec_env

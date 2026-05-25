@@ -15,11 +15,7 @@ def log_error(msg):
     ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     print(f"[{ts}] [ERROR] {msg}", file=sys.stderr, flush=True)
 
-_SRC_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "src")
-if os.path.isdir(_SRC_DIR) and _SRC_DIR not in sys.path:
-    sys.path.insert(0, _SRC_DIR)
-
-from path_layout import logs_dir, tmp_merge_dir
+from mfsflow.path_layout import logs_dir, tmp_merge_dir
 
 
 def format_duration(seconds):
@@ -109,7 +105,13 @@ class PipelineRuntime:
 
     @classmethod
     def from_config(cls, config, yaml_file):
-        toolkit_dir = config.get("toolkit_directory", ".")
+        toolkit_dir = config.get("toolkit_directory")
+        if not toolkit_dir:
+            # Default to mfsflow package location
+            toolkit_dir = os.path.dirname(os.path.abspath(__file__))
+        elif not os.path.isabs(toolkit_dir):
+            # Relative path: resolve relative to YAML file's directory
+            toolkit_dir = os.path.join(os.path.dirname(os.path.abspath(yaml_file)), toolkit_dir)
         exec_env = os.environ.copy()
         software_dir = os.path.join(toolkit_dir, "software")
         if sys.platform.startswith("linux") and os.path.isdir(software_dir):
@@ -149,19 +151,19 @@ class PipelineRuntime:
         out_hash = hashlib.sha1(os.path.abspath(out_dir).encode("utf-8")).hexdigest()[:10]
         return os.path.join(os.path.abspath(tmp_root), f"mfsflow_{safe_project}_{out_hash}", "tmp_merge")
 
-    def install_src_path(self):
-        toolkit_src_dir = os.path.join(self.toolkit_dir, "src")
-        if os.path.isdir(toolkit_src_dir) and toolkit_src_dir not in sys.path:
-            sys.path.insert(0, toolkit_src_dir)
-
     def resolve_script(self, script_name):
-        direct = os.path.join(self.toolkit_dir, script_name)
-        if os.path.exists(direct):
-            return direct
-        in_src = os.path.join(self.toolkit_dir, "src", script_name)
-        if os.path.exists(in_src):
-            return in_src
-        raise FileNotFoundError(f"Script not found: {script_name}. Tried: {direct}, {in_src}")
+        # mfsflow package location (where runtime.py resides)
+        mfsflow_pkg = os.path.dirname(os.path.abspath(__file__))
+        candidates = [
+            os.path.join(self.toolkit_dir, script_name),
+            os.path.join(self.toolkit_dir, "scripts", script_name),
+            os.path.join(mfsflow_pkg, "scripts", script_name),
+            os.path.join(mfsflow_pkg, script_name),
+        ]
+        for candidate in candidates:
+            if os.path.exists(candidate):
+                return candidate
+        raise FileNotFoundError(f"Script not found: {script_name}. Tried: {', '.join(candidates)}")
 
 
 def remove_path(path):

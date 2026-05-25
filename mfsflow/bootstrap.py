@@ -2,13 +2,9 @@ import os
 import shutil
 import sys
 
-_SRC_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "src")
-if os.path.isdir(_SRC_DIR) and _SRC_DIR not in sys.path:
-    sys.path.insert(0, _SRC_DIR)
-
-from barcode_discovery import build_expected_records, discover_barcodes, write_expected_tables
+from mfsflow.barcode_discovery import build_expected_records, discover_barcodes, write_expected_tables
 from mfsflow.runtime import log_info, log_error
-from path_layout import barcode_dir, config_dir, ensure_layout, outputs_dir
+from mfsflow.path_layout import barcode_dir, config_dir, ensure_layout, outputs_dir
 
 
 def create_output_dirs(config):

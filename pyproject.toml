@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mfsflow"
-version = "0.1.0"
+version = "1.0.0"
 description = "Smart-seq3/MGI analysis pipeline"
 readme = "README.md"
 requires-python = ">=3.8"
@@ -24,4 +24,17 @@ dependencies = [
 mfsflow = "mfsflow.cli:main"
 
 [tool.setuptools]
-packages = ["mfsflow", "mfsflow.config", "mfsflow.pipeline", "mfsflow.stages"]
+packages = [
+    "mfsflow",
+    "mfsflow.config",
+    "mfsflow.pipeline",
+    "mfsflow.stages",
+    "mfsflow.scripts",
+]
+
+[tool.setuptools.package-data]
+mfsflow = [
+    "yaml/*.yaml",
+    "report_assets/*",
+    "software/*",
+]

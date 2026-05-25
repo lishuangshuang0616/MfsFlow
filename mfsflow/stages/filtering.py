@@ -7,7 +7,7 @@ import subprocess
 
 from mfsflow.bootstrap import run_barcode_discovery
 from mfsflow.runtime import log_info
-from path_layout import barcode_dir, config_dir
+from mfsflow.path_layout import barcode_dir, config_dir
 
 
 def estimate_avg_line_len(path, sample_lines=1000):
@@ -40,8 +40,7 @@ def run_filtering_stage(runtime, timer, run_stage_cmd, run_log):
     yaml_file = runtime.yaml_file
     resolve_script = runtime.resolve_script
 
-    runtime.install_src_path()
-    import pipeline_modules
+    from mfsflow import pipeline_modules
 
     log_info("Starting Filtering Stage")
 

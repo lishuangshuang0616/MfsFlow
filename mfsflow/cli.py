@@ -2,10 +2,6 @@ import argparse
 import os
 import sys
 
-_SRC_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "src")
-if os.path.isdir(_SRC_DIR) and _SRC_DIR not in sys.path:
-    sys.path.insert(0, _SRC_DIR)
-
 FILTERING = "Filtering"
 STAGE_ORDER = ("Filtering", "Mapping", "Counting", "Summarising")
 
@@ -34,12 +30,10 @@ def generate_report(config):
         from datetime import datetime
         from pathlib import Path
 
-        from path_layout import logs_dir
+        from mfsflow.path_layout import logs_dir
         from mfsflow.runtime import PipelineTimer
 
-        if str(Path(__file__).resolve().parents[1] / "src") not in sys.path:
-            sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
-        import report as report
+        from mfsflow import report
         from mfsflow.runtime import log_info, log_error
 
         log_info('Generating HTML Report...')
@@ -58,8 +52,8 @@ def main(argv=None):
     from datetime import datetime
     from pathlib import Path
 
-    from pipeline_config import build_base_config, resolve_samplesheet_barcodes
-    from run_config import write_run_config
+    from mfsflow.pipeline_config import build_base_config, resolve_samplesheet_barcodes
+    from mfsflow.run_config import write_run_config
     from mfsflow.bootstrap import create_barcode_tables, create_output_dirs, process_fastq_inputs
     from mfsflow.config.validation import require_supported_python, validate_input_files
     from mfsflow.pipeline.runner import run_pipeline_stages
@@ -69,7 +63,7 @@ def main(argv=None):
 
     log_info(f'Start analysis for {args.sample}.')
 
-    script_dir = str(Path(__file__).resolve().parents[1])
+    script_dir = str(Path(__file__).resolve().parent)
     config, samplesheet_records = build_base_config(args, script_dir)
 
     create_output_dirs(config)
