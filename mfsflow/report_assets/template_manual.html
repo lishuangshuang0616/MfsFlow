@@ -62,7 +62,7 @@ ${plotly_loader_tag}
     .grid { display: grid; gap: 14px; }
     .cards { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); margin-top: 14px; }
     .two { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
-    .curve-grid { grid-template-columns: repeat(2, minmax(0, 560px)); justify-content: center; }
+    .curve-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); justify-content: stretch; }
     .panel {
         background: var(--panel);
         border: 1px solid var(--line);
@@ -315,7 +315,6 @@ ${plotly_loader_tag}
     const geneBodyX = parseJson('${rna_gene_body_percentile}', []);
     const geneBodyUmi = parseJson('${rna_gene_body_umi_maxnorm}', []);
     const geneBodyInt = parseJson('${rna_gene_body_internal_maxnorm}', []);
-    const geneBodyAll = parseJson('${rna_gene_body_all_maxnorm}', []);
 
     function parseJson(raw, fallback) {
         try {
@@ -620,6 +619,28 @@ ${plotly_loader_tag}
         const lib = normalizeSeriesByX(satX, satLib);
         const medUmiSeries = normalizeSeriesByX(satX, medUmi);
         const medReadSeries = normalizeSeriesByX(satX, medRead);
+        function ensureZeroStart(series) {
+            if (!series.x.length) {
+                series.x = [0];
+                series.y = [0];
+                return;
+            }
+            const zeroIdx = series.x.indexOf(0);
+            if (zeroIdx === 0) {
+                series.y[0] = 0;
+            } else if (zeroIdx > 0) {
+                series.x.splice(zeroIdx, 1);
+                series.y.splice(zeroIdx, 1);
+                series.x.unshift(0);
+                series.y.unshift(0);
+            } else {
+                series.x.unshift(0);
+                series.y.unshift(0);
+            }
+        }
+        ensureZeroStart(lib);
+        ensureZeroStart(medUmiSeries);
+        ensureZeroStart(medReadSeries);
         const traces = [
             { type: 'scatter', mode: 'lines+markers', x: lib.x, y: lib.y, name: 'Library saturation', line: { color: qcColors.umi, width: 2.4 }, marker: { size: 5 } }
         ];
@@ -639,9 +660,7 @@ ${plotly_loader_tag}
         if (!window.Plotly || !geneBodyX.length) { plot.innerHTML = '<div class="empty">No gene body data</div>'; return; }
         const smoothInt = smoothSeries(geneBodyInt, 5);
         const smoothUmi = smoothSeries(geneBodyUmi, 5);
-        const smoothAll = smoothSeries(geneBodyAll, 5);
         Plotly.newPlot(plot, [
-            { type: 'scatter', mode: 'lines', x: geneBodyX, y: smoothAll, name: 'All', line: { color: '#111827', width: 2.4, shape: 'spline', smoothing: 1.15 } },
             { type: 'scatter', mode: 'lines', x: geneBodyX, y: smoothInt, name: 'Internal', line: { color: qcColors.internal, width: 2.2, shape: 'spline', smoothing: 1.15 } },
             { type: 'scatter', mode: 'lines', x: geneBodyX, y: smoothUmi, name: 'UMI', line: { color: qcColors.umi, width: 2.2, shape: 'spline', smoothing: 1.15 } }
         ], plotLayout({

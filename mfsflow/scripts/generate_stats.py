@@ -121,12 +121,10 @@ def plot_coverage(cov_umi, cov_int, out_prefix):
 
     maxnorm_umi_s = smooth(maxnorm_umi, window=7)
     maxnorm_int_s = smooth(maxnorm_int, window=7)
-    maxnorm_all_s = smooth(maxnorm_all, window=7)
 
     x = np.arange(1, 101)
 
     plt.figure(figsize=(10, 8))
-    plt.plot(x, maxnorm_all_s, label='All Coverage', color='black', linewidth=2)
     plt.plot(x, maxnorm_int_s, label='Internal Coverage', color='blue', linewidth=2)
     plt.plot(x, maxnorm_umi_s, label='UMI Coverage', color='red', linewidth=2)
 

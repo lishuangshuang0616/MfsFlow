@@ -388,7 +388,7 @@ Instead of command-line arguments, you can use a YAML configuration file:
 mfsflow --config /path/to/config.yaml
 ```
 
-See `yaml/example_config.yaml` for a complete example.
+See `mfsflow/yaml/example_config.yaml` (in source repo) for a complete example.
 
 ### Performance Optimization
 

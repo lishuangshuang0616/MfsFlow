@@ -38,7 +38,7 @@ Create a YAML file and pass it to MfsFlow:
 mfsflow --config /path/to/config.yaml
 ```
 
-See `yaml/example_config.yaml` for a complete example.
+See `mfsflow/yaml/example_config.yaml` (in source repo) for a complete example.
 
 ## Project Configuration
 
@@ -426,7 +426,7 @@ read_layout: PE
 
 ## Complete Example Configuration
 
-See `yaml/example_config.yaml` for a complete example.
+See `mfsflow/yaml/example_config.yaml` (in source repo) for a complete example.
 
 ### Minimal Configuration (Auto Mode)
 ```yaml

@@ -25,7 +25,7 @@ pip install -e .
 mfsflow --help
 ```
 
-**Note**: MfsFlow comes with bundled bioinformatics tools (STAR, Samtools, Pigz, Seqkit, FeatureCounts) in the `software/` directory. **No manual installation required**.
+**Note**: MfsFlow comes with bundled bioinformatics tools (STAR, Samtools, Pigz, Seqkit, FeatureCounts) in `mfsflow/software/` (inside the installed package). **No manual installation required**.
 
 ---
 
@@ -63,13 +63,6 @@ pip install -e .
 
 ```bash
 pip install .
-```
-
-**Run from source** (no pip needed):
-
-```bash
-export PYTHONPATH=/path/to/MfsFlow:$PYTHONPATH
-python3 run_analysis_pipeline.py --help
 ```
 
 ---
