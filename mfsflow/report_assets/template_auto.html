@@ -7,200 +7,405 @@
 ${plotly_loader_tag}
 <style>
     :root {
-        --bg: #f6f8fb;
-        --bg-accent: #e8eef7;
+        --bg: #f8fafc;
         --panel: #ffffff;
-        --text: #172033;
-        --muted: #64748b;
+        --text: #0f172a;
+        --text-secondary: #475569;
+        --muted: #94a3b8;
         --line: #e2e8f0;
-        --green: #1f9d66;
-        --blue: #2563eb;
-        --teal: #0f766e;
-        --purple: #7c3aed;
-        --orange: #ea7a20;
-        --red: #dc2626;
-        --soft-red: #fff7f5;
-        --soft-orange: #fff8ed;
+        --primary: #0f766e;
+        --primary-light: #14b8a6;
+        --primary-bg: #f0fdfa;
+        --blue: #3b82f6;
+        --green: #10b981;
+        --amber: #f59e0b;
+        --red: #ef4444;
+        --purple: #8b5cf6;
+        --success-bg: #ecfdf5;
+        --warning-bg: #fffbeb;
+        --danger-bg: #fef2f2;
     }
-    * { box-sizing: border-box; }
+    * { box-sizing: border-box; margin: 0; }
     body {
-        margin: 0;
-        background:
-            linear-gradient(180deg, var(--bg-accent) 0, transparent 240px),
-            var(--bg);
+        background: var(--bg);
         color: var(--text);
-        font-family: Inter, -apple-system, BlinkMacSystemFont, "PingFang SC", "Segoe UI", Arial, sans-serif;
-        font-size: 13px;
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Segoe UI', Arial, sans-serif;
+        font-size: 14px;
+        line-height: 1.6;
+        -webkit-font-smoothing: antialiased;
     }
-    .shell { max-width: 1200px; margin: 0 auto; padding: 18px; }
+    .shell { max-width: 1200px; margin: 0 auto; padding: 24px 32px; }
+    
+    /* Hero Section */
     .hero {
-        background: linear-gradient(135deg, #064e3b, #0f766e);
+        background: linear-gradient(135deg, #0f2929 0%, #134e4a 50%, #0f766e 100%);
         color: #fff;
-        border-radius: 8px;
-        padding: 18px 22px;
+        border-radius: 16px;
+        padding: 28px 32px;
         display: flex;
         justify-content: space-between;
-        gap: 18px;
         align-items: flex-end;
+        gap: 24px;
+        margin-bottom: 24px;
+        box-shadow: 0 4px 24px rgba(15, 118, 110, 0.35);
     }
-    .hero h1 { margin: 0; font-size: 23px; line-height: 1.2; }
-    .hero .sub { margin-top: 8px; opacity: .9; }
-    .badge { border: 1px solid rgba(255,255,255,.35); padding: 6px 10px; border-radius: 6px; white-space: nowrap; }
+    .hero h1 { 
+        margin: 0; 
+        font-size: 26px; 
+        font-weight: 700;
+        letter-spacing: -0.5px;
+        line-height: 1.3;
+    }
+    .hero .sub { 
+        margin-top: 6px; 
+        opacity: 0.85; 
+        font-size: 14px;
+        font-weight: 400;
+    }
+    .badge { 
+        background: rgba(255,255,255,0.15); 
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255,255,255,0.25); 
+        padding: 6px 14px; 
+        border-radius: 8px; 
+        font-size: 13px;
+        font-weight: 500;
+    }
     .mode-chip {
         display: inline-flex;
         align-items: center;
         gap: 6px;
-        background: rgba(31, 157, 102, .18);
-        border: 1px solid rgba(31, 157, 102, .48);
-        color: #d1fae5;
-        border-radius: 999px;
-        padding: 5px 9px;
+        background: rgba(16, 185, 129, 0.2);
+        border: 1px solid rgba(52, 211, 153, 0.4);
+        color: #a7f3d0;
+        border-radius: 20px;
+        padding: 5px 12px;
         font-size: 12px;
-        font-weight: 700;
+        font-weight: 600;
         margin-bottom: 8px;
+        letter-spacing: 0.3px;
     }
-    .grid { display: grid; gap: 14px; }
-    .cards { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); margin-top: 14px; }
-    .quality-cards { grid-template-columns: repeat(auto-fit, minmax(145px, 1fr)); margin-top: 10px; }
-    .quality-cards .card { padding: 12px 14px; box-shadow: none; }
-    .quality-cards .card-value { font-size: 18px; }
+    
+    /* Grid System */
+    .grid { display: grid; gap: 16px; }
+    .cards { 
+        grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); 
+        margin-top: 16px; 
+    }
     .two { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
-    .curve-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); justify-content: stretch; }
-    .panel {
-        background: var(--panel);
-        border: 1px solid var(--line);
-        border-radius: 10px;
-        padding: 18px;
-        margin-top: 14px;
-        box-shadow: 0 5px 18px rgba(15, 23, 42, .055);
-    }
+    .curve-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    
+    /* Cards */
     .card {
         background: var(--panel);
         border: 1px solid var(--line);
-        border-radius: 10px;
-        padding: 14px;
-        box-shadow: 0 3px 12px rgba(15, 23, 42, .045);
+        border-radius: 12px;
+        padding: 16px 18px;
+        transition: all 0.2s ease;
+        position: relative;
+        overflow: hidden;
     }
-    .card-value { font-size: 22px; font-weight: 700; overflow-wrap: anywhere; letter-spacing: 0; }
-    .card-label { color: var(--muted); margin-top: 5px; font-size: 12px; }
+    .card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 3px;
+        background: linear-gradient(90deg, var(--primary), var(--primary-light));
+        opacity: 0;
+        transition: opacity 0.2s ease;
+    }
+    .card:hover::before { opacity: 1; }
+    .card:hover { 
+        border-color: var(--primary-light);
+        box-shadow: 0 4px 16px rgba(15, 118, 110, 0.1);
+        transform: translateY(-1px);
+    }
+    .card-value { 
+        font-size: 24px; 
+        font-weight: 700; 
+        color: var(--text);
+        letter-spacing: -0.5px;
+        line-height: 1.2;
+        margin-bottom: 4px;
+    }
+    .card-label { 
+        color: var(--muted); 
+        font-size: 12px; 
+        font-weight: 500;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    
+    /* Panels */
+    .panel {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 20px 24px;
+        margin-top: 20px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+    }
     h2 {
-        font-size: 17px;
-        margin: 0 0 14px;
-        padding-bottom: 8px;
-        border-bottom: 1px solid #edf2f7;
+        font-size: 18px;
+        font-weight: 600;
+        margin: 0 0 16px;
+        padding-bottom: 12px;
+        border-bottom: 2px solid #f1f5f9;
+        color: var(--text);
     }
-    h3 { font-size: 14px; margin: 0 0 10px; color: #263244; }
+    h3 { 
+        font-size: 15px; 
+        font-weight: 600;
+        margin: 0 0 12px; 
+        color: var(--text-secondary);
+    }
+    
+    /* Quality Inline */
+    .quality-inline { 
+        display: flex; 
+        flex-wrap: wrap; 
+        gap: 12px 40px; 
+        margin-top: 12px; 
+        padding: 16px 20px;
+        background: #f8fafc;
+        border-radius: 10px;
+        border: 1px solid #f1f5f9;
+    }
+    .quality-item { 
+        display: inline-flex; 
+        align-items: center; 
+        gap: 8px; 
+        font-size: 13px; 
+    }
+    .quality-item .qv { 
+        font-weight: 700; 
+        font-size: 18px; 
+        color: var(--primary);
+        font-variant-numeric: tabular-nums;
+    }
+    .quality-item .ql { 
+        color: var(--muted); 
+        font-size: 12px; 
+        font-weight: 500;
+    }
+    
+    /* Typography */
     .muted { color: var(--muted); }
-    .toolbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
+    
+    /* Toolbar */
+    .toolbar { 
+        display: flex; 
+        gap: 12px; 
+        align-items: center; 
+        flex-wrap: wrap; 
+        margin-bottom: 16px;
+        padding: 12px 16px;
+        background: #f8fafc;
+        border-radius: 10px;
+        border: 1px solid #f1f5f9;
+    }
+    
+    /* Form Elements */
     select, input {
         border: 1px solid var(--line);
-        border-radius: 6px;
-        padding: 6px 32px 6px 12px;
-        background: #fff url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="%2364748b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>') no-repeat right 8px center;
+        border-radius: 8px;
+        padding: 7px 32px 7px 12px;
+        background: #fff url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="%2394a3b8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>') no-repeat right 10px center;
         background-size: 14px;
         color: var(--text);
         appearance: none;
         -webkit-appearance: none;
         font-family: inherit;
         font-size: 13px;
-        box-shadow: 0 1px 2px rgba(15, 23, 42, .04);
-        transition: border-color 0.15s ease;
+        font-weight: 500;
+        transition: all 0.15s ease;
+        min-height: 34px;
     }
-    input {
-        padding: 6px 12px;
-        background-image: none;
-    }
+    input { padding: 7px 12px; background-image: none; }
     select:focus, input:focus {
         outline: none;
-        border-color: var(--blue);
-        box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
+        border-color: var(--primary);
+        box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.1);
     }
+    
+    /* Buttons */
     .btn {
         background: var(--panel);
         border: 1px solid var(--line);
-        border-radius: 6px;
-        padding: 6px 12px;
+        border-radius: 8px;
+        padding: 7px 14px;
         color: var(--text);
         cursor: pointer;
         font-weight: 500;
-        box-shadow: 0 1px 2px rgba(15, 23, 42, .04);
+        font-size: 13px;
         transition: all 0.15s ease;
         display: inline-flex;
         align-items: center;
         gap: 6px;
+        min-height: 34px;
     }
-    .btn:hover { background: #f8fafc; border-color: #cbd5e1; }
-
+    .btn:hover { 
+        background: #f8fafc; 
+        border-color: var(--primary-light);
+        color: var(--primary);
+    }
+    
+    /* Pagination */
     .pagination {
         display: flex;
-        gap: 4px;
+        gap: 6px;
         align-items: center;
-        margin-top: 12px;
+        margin-top: 16px;
         justify-content: flex-end;
     }
     .page-btn {
-        padding: 4px 10px;
+        padding: 6px 12px;
         border: 1px solid var(--line);
         background: var(--panel);
         cursor: pointer;
-        border-radius: 4px;
+        border-radius: 6px;
         color: var(--text);
+        font-weight: 500;
+        font-size: 13px;
+        transition: all 0.15s ease;
     }
-    .page-btn:hover { background: #f1f5f9; }
-    .page-btn.active { background: var(--blue); color: white; border-color: var(--blue); }
-    .page-btn[disabled] { opacity: 0.5; cursor: not-allowed; }
-
+    .page-btn:hover { 
+        background: #f1f5f9; 
+        border-color: var(--primary-light);
+    }
+    .page-btn.active { 
+        background: var(--primary); 
+        color: white; 
+        border-color: var(--primary); 
+    }
+    .page-btn[disabled] { opacity: 0.4; cursor: not-allowed; }
+    
+    /* Tables */
     th.sortable { cursor: pointer; user-select: none; }
-    th.sortable:hover { background: #e2e8f0; }
-    th.sortable::after { content: '↕'; margin-left: 6px; opacity: 0.3; font-size: 11px; }
+    th.sortable:hover { background: #f1f5f9; }
+    th.sortable::after { content: '⇅'; margin-left: 6px; opacity: 0.3; font-size: 11px; }
     th.sortable.asc::after { content: '↑'; opacity: 1; }
     th.sortable.desc::after { content: '↓'; opacity: 1; }
-    table { width: 100%; border-collapse: collapse; background: #fff; font-variant-numeric: tabular-nums; }
-    th, td { border: 1px solid var(--line); padding: 6px 8px; white-space: nowrap; }
-    th { background: #f1f5f9; text-align: left; font-weight: 700; }
-    td.numeric { text-align: right; font-weight: 600; }
-    tbody tr:nth-child(even) td { background: #fbfdff; }
-    tbody tr:hover td { background: #eef6ff; }
-    tr.review-row td { background: var(--soft-orange) !important; }
-    tr.warn-row td { background: var(--soft-red) !important; }
-    .table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; }
+    
+    table { 
+        width: 100%; 
+        border-collapse: collapse; 
+        background: #fff; 
+        font-variant-numeric: tabular-nums; 
+    }
+    th, td { 
+        border: 1px solid var(--line); 
+        padding: 8px 10px; 
+        white-space: nowrap; 
+    }
+    th { 
+        background: #f8fafc; 
+        text-align: left; 
+        font-weight: 600;
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.3px;
+        color: var(--text-secondary);
+    }
+    td { font-size: 13px; }
+    td.numeric { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
+    tbody tr:nth-child(even) td { background: #fafbfc; }
+    tbody tr:hover td { background: #f0fdfa; }
+    tr.review-row td { background: var(--warning-bg) !important; }
+    tr.warn-row td { background: var(--danger-bg) !important; }
+    
+    /* Table Wrappers */
+    .table-wrap { 
+        overflow-x: auto; 
+        border: 1px solid var(--line); 
+        border-radius: 10px;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.02);
+    }
     .plate-overview-table { width: auto; min-width: 1040px; }
-    .stats-table-wrap { max-height: 460px; overflow: auto; }
+    .stats-table-wrap { max-height: 500px; overflow: auto; }
     .stats-table-wrap th { position: sticky; top: 0; z-index: 3; }
-    .stats-table-wrap th:first-child, .stats-table-wrap td:first-child {
+    .stats-table-wrap th:first-child, 
+    .stats-table-wrap td:first-child {
         position: sticky;
         left: 0;
         z-index: 2;
         background: inherit;
     }
-    .stats-table-wrap th:first-child { z-index: 4; background: #f1f5f9; }
+    .stats-table-wrap th:first-child { z-index: 4; background: #f8fafc; }
     .stats-table-wrap tbody tr:nth-child(even) td { background: #ffffff; }
     .table-wrap table { border: 0; }
     .table-wrap th:first-child, .table-wrap td:first-child { border-left: 0; }
     .table-wrap th:last-child, .table-wrap td:last-child { border-right: 0; }
+    
+    /* Plots */
     .plot {
         width: 100%;
-        height: 330px;
-        min-height: 300px;
+        height: 350px;
+        min-height: 320px;
         border: 1px solid #e8edf5;
-        border-radius: 8px;
+        border-radius: 10px;
         background: #ffffff;
-        padding: 16px;
+        padding: 20px;
+        transition: box-shadow 0.2s ease;
     }
-    .compact-plot { height: 300px; min-height: 270px; margin-top: 12px; }
-    .curve-plot { height: 390px; min-height: 360px; }
-    .plate-plot { height: 520px; min-height: 460px; max-width: 1060px; margin: 0 auto; }
-    .empty { color: var(--muted); display: flex; align-items: center; justify-content: center; min-height: 120px; }
-    details { margin-top: 16px; }
-    summary { cursor: pointer; color: var(--muted); font-weight: 600; }
-    pre { overflow-x: auto; background: #f8fafc; color: #1e293b; border: 1px solid #e2e8f0; padding: 14px; border-radius: 8px; font-size: 12px; }
-    footer { color: var(--muted); text-align: center; padding: 20px 0 8px; }
+    .plot:hover {
+        box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+    }
+    .compact-plot { height: 320px; min-height: 290px; margin-top: 12px; }
+    .curve-plot { height: 400px; min-height: 370px; }
+    .plate-plot { height: 540px; min-height: 480px; max-width: 1080px; margin: 0 auto; }
+    .empty { 
+        color: var(--muted); 
+        display: flex; 
+        align-items: center; 
+        justify-content: center; 
+        min-height: 140px;
+        font-style: italic;
+    }
+    
+    /* Misc */
+    details { margin-top: 20px; }
+    summary { 
+        cursor: pointer; 
+        color: var(--muted); 
+        font-weight: 500; 
+        font-size: 13px;
+        padding: 8px 0;
+    }
+    summary:hover { color: var(--primary); }
+    pre { 
+        overflow-x: auto; 
+        background: #f8fafc; 
+        color: #334155; 
+        border: 1px solid #e2e8f0; 
+        padding: 16px; 
+        border-radius: 10px; 
+        font-size: 12px;
+        line-height: 1.6;
+    }
+    footer { 
+        color: var(--muted); 
+        text-align: center; 
+        padding: 32px 0 16px; 
+        font-size: 13px;
+        border-top: 1px solid #f1f5f9;
+        margin-top: 32px;
+    }
+    
+    /* Responsive */
     @media (max-width: 900px) {
-        .shell { padding: 12px; }
-        .hero { display: block; }
+        .shell { padding: 16px; }
+        .hero { 
+            display: block; 
+            padding: 20px;
+            border-radius: 12px;
+        }
         .badge { display: inline-block; margin-top: 12px; }
         .two { grid-template-columns: 1fr; }
         .curve-grid { grid-template-columns: 1fr; }
+        .cards { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
     }
 </style>
 </head>
@@ -221,7 +426,6 @@ ${plotly_loader_tag}
 
     <section class="panel">
         <h2>Plate Overview</h2>
-        <div class="muted" style="margin-bottom: 10px;">Active well: all reads &gt; 0.</div>
         <div class="table-wrap">
             <table class="plate-overview-table">
                 <thead>
@@ -292,18 +496,23 @@ ${plotly_loader_tag}
             <div id="read-distribution" class="plot"></div>
         </div>
         <div class="panel">
-            <h2>Per-Well QC Distribution</h2>
-            <div class="toolbar">
-                <label><input type="checkbox" id="metric-logx" checked/> Log Scale</label>
-                <label>Metric
-                    <select id="metric-y">
-                        <option value="mappingratio">Mapping ratio</option>
-                        <option value="exonintronratio">Exon/Intron ratio</option>
-                        <option value="umifrac">UMI fraction</option>
-                        <option value="umis">UMIs</option>
-                        <option value="genes">Genes</option>
-                    </select>
-                </label>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                <h2 style="margin: 0;">Per-Well QC Distribution</h2>
+                <div style="display: flex; gap: 10px; align-items: center;">
+                    <label style="display: inline-flex; align-items: center; gap: 4px; font-size: 13px; color: var(--text-secondary);">
+                        <input type="checkbox" id="metric-logx" checked style="margin: 0;"/> Log Scale
+                    </label>
+                    <label style="display: inline-flex; align-items: center; gap: 4px; font-size: 13px; color: var(--text-secondary);">
+                        Metric
+                        <select id="metric-y">
+                            <option value="mappingratio">Mapping ratio</option>
+                            <option value="exonintronratio">Exon/Intron ratio</option>
+                            <option value="umifrac">UMI fraction</option>
+                            <option value="umis">UMIs</option>
+                            <option value="genes">Genes</option>
+                        </select>
+                    </label>
+                </div>
             </div>
             <div id="metric-scatter" class="plot"></div>
         </div>
@@ -323,14 +532,14 @@ ${plotly_loader_tag}
     <section class="panel">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
             <h2 style="margin: 0;">Per-Well Statistics</h2>
-            <button id="export-btn" class="btn">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-                Export CSV
-            </button>
-        </div>
-        <div class="toolbar">
-            <input id="stats-search" placeholder="Search well..."/>
-            <span class="muted" id="stats-count"></span>
+            <div style="display: flex; gap: 10px; align-items: center;">
+                <input id="stats-search" placeholder="Search well..." style="padding: 5px 10px; font-size: 12px;"/>
+                <span class="muted" id="stats-count" style="font-size: 12px;"></span>
+                <button id="export-btn" class="btn" style="padding: 5px 10px; font-size: 12px;">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                    Export CSV
+                </button>
+            </div>
         </div>
         <div class="table-wrap stats-table-wrap">
             <table id="stats-table"></table>
@@ -344,12 +553,14 @@ ${plotly_loader_tag}
             <div class="card"><div class="card-value">${rna_species}</div><div class="card-label">Transcriptome</div></div>
             <div class="card"><div class="card-value">${rna_total_gene}</div><div class="card-label">Genes in matrix</div></div>
             <div class="card"><div class="card-value">${rna_saturation}</div><div class="card-label">Final saturation</div></div>
-            <div class="card"><div class="card-value" id="run-total-reads">NA</div><div class="card-label">Total sequencing reads</div></div>
-            <div class="card"><div class="card-value" id="run-valid-barcode-rate">NA</div><div class="card-label">Valid barcode rate</div></div>
         </div>
         <h3 style="margin-top: 18px;">Sequencing Quality</h3>
-        <div class="grid quality-cards" id="q30-cards">
-            <div class="card"><div class="card-value">NA</div><div class="card-label">No Q30 data</div></div>
+        <div class="quality-inline" id="q30-cards">
+            <div class="quality-item"><span class="ql">Total sequencing reads:</span><span class="qv" id="run-total-reads">NA</span></div>
+            <div class="quality-item"><span class="ql">Valid barcode rate:</span><span class="qv" id="run-valid-barcode-rate">NA</span></div>
+        </div>
+        <div class="quality-inline" id="q30-values" style="margin-top: 8px;">
+            <div class="quality-item">No Q30 data</div>
         </div>
         <details>
             <summary>Configuration</summary>
@@ -830,7 +1041,7 @@ ${plotly_loader_tag}
         if (totalReads) totalReads.textContent = qualityValue('Total sequencing reads');
         if (validRate) validRate.textContent = qualityValue('Valid barcode rate');
 
-        const target = el('q30-cards');
+        const target = el('q30-values');
         if (!target) return;
         const rows = [
             ['Cell barcode Q30', qualityValue('Cell barcode Q30')],
@@ -839,7 +1050,7 @@ ${plotly_loader_tag}
             ['Read2 cDNA Q30', qualityValue('Read2 cDNA Q30')]
         ];
         target.innerHTML = rows.map(function(row) {
-            return '<div class="card"><div class="card-value">' + row[1] + '</div><div class="card-label">' + row[0] + '</div></div>';
+            return '<div class="quality-item"><span class="ql">' + row[0] + ':</span><span class="qv">' + row[1] + '</span></div>';
         }).join('');
     }
     function renderStatsTable() {
