@@ -57,6 +57,32 @@ class BarcodeDiscoveryTests(unittest.TestCase):
             with open(summary) as handle:
                 self.assertIn("MANUAL9", handle.read())
 
+    def test_discover_skips_hamming_matches_that_hit_multiple_candidates(self):
+        records = [
+            {
+                "candidate_type": "manual",
+                "candidate_id": "9",
+                "wellID": "MANUAL9",
+                "barcode": "AAAAAAAAAAAAAAAAAAAA",
+                "barcode_type": "umi",
+            },
+            {
+                "candidate_type": "manual",
+                "candidate_id": "10",
+                "wellID": "MANUAL10",
+                "barcode": "AAAAAAAAAAAAAAAAAAAT",
+                "barcode_type": "umi",
+            },
+        ]
+        with tempfile.TemporaryDirectory() as tmpdir:
+            bcstats = os.path.join(tmpdir, "sample.BCstats.txt")
+            with open(bcstats, "w") as handle:
+                handle.write("AAAAAAAAAAAAAAAAAAAG\t100\n")
+
+            report = os.path.join(tmpdir, "discovery.tsv")
+            with self.assertRaisesRegex(ValueError, "no confident candidate"):
+                discover_barcodes(bcstats, records, report, min_unique_barcodes=1)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -211,8 +211,8 @@ def calculate_saturation(out_dir, project):
         print("Saturation distribution file not found. Skipping saturation analysis.")
         return None
 
-    # Include more granular lower fractions as requested
-    fractions = np.array([0.01, 0.02, 0.05, 0.08, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0])
+    # Include a true zero-depth anchor so the reported curves start at the origin.
+    fractions = np.array([0.0, 0.01, 0.02, 0.05, 0.08, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0])
 
     def calc_sat_curve(json_file, fractions):
         if not os.path.exists(json_file): return np.zeros(len(fractions))
@@ -234,10 +234,16 @@ def calculate_saturation(out_dir, project):
         if umi_counts.size <= 1_000_000:
             probs = 1.0 - np.power(1.0 - fractions[:, None], umi_counts[None, :])
             exp_unique = np.sum(probs * umi_freqs[None, :], axis=1)
-            return 1.0 - (exp_unique / exp_reads)
+            saturation = np.zeros(len(fractions), dtype=np.float64)
+            nonzero = exp_reads > 0
+            saturation[nonzero] = 1.0 - (exp_unique[nonzero] / exp_reads[nonzero])
+            return saturation
 
         saturation = np.empty(len(fractions), dtype=np.float64)
         for i, frac in enumerate(fractions):
+            if exp_reads[i] <= 0:
+                saturation[i] = 0.0
+                continue
             probs = 1.0 - np.power(1.0 - frac, umi_counts)
             exp_unique = np.sum(probs * umi_freqs)
             saturation[i] = 1.0 - (exp_unique / exp_reads[i])
@@ -397,9 +403,9 @@ def plot_features(read_stats, wells, out_pdf):
     feat_colors = {
         "Exon": "#1A5084", "Intron": "#118730", "Unmapped": "#545454",
         "Ambiguity": "#FFA54F", 
-        "Intergenic": "#FFD700", "Unused BC": "#BABABA",
+        "Intergenic": "#FFD700", "Other_Unassigned": "#8A8F98", "Unused BC": "#BABABA",
     }
-    categories_order = ["Exon", "Intron", "Intergenic", "Ambiguity", "Unmapped"]
+    categories_order = ["Exon", "Intron", "Intergenic", "Ambiguity", "Other_Unassigned", "Unmapped"]
     
     totals = {c: 0 for c in categories_order}
     per_cell_frac = {c: [] for c in categories_order}
@@ -552,7 +558,7 @@ def main():
             "wellID", "internal_barcodes", "umi_barcodes", 
             "internal_reads", "umi_reads", "all_reads",
             "Ambiguity_reads", "Exon_reads", "Intergenic_reads", "intron_reads", 
-            "Unmapped_reads", "MappingRatio", "ExonIntronRatio", "UMIfrac",
+            "Unmapped_reads", "Other_Unassigned_reads", "MappingRatio", "ExonIntronRatio", "UMIfrac",
             "Exon_umis", "Intron_umis", "Intron_Exon_umis",
             "Exon_genes", "Intron_genes", "Intron_Exon_genes",
             "Exon_read_genes", "Intron_read_genes", "Intron_Exon_read_genes"
@@ -569,12 +575,13 @@ def main():
             inter_r = r_stats.get('Intergenic', 0)
             intron_r = r_stats.get('Intron', 0)
             unmapped = r_stats.get('Unmapped', 0)
+            other_unassigned = r_stats.get('Other_Unassigned', 0)
 
             internal_r = r_stats.get('Internal_Reads', 0)
             umi_r = r_stats.get('UMI_Reads', 0)
             all_r = internal_r + umi_r
             mapped_r = exon_r + intron_r + inter_r + ambig
-            mapping_denom = mapped_r + unmapped
+            mapping_denom = mapped_r + unmapped + other_unassigned
             mapping_ratio = (mapped_r / mapping_denom) if mapping_denom > 0 else ""
             exon_intron_ratio = (exon_r / intron_r) if intron_r > 0 else ""
             umi_frac = (umi_r / all_r) if all_r > 0 else ""
@@ -591,7 +598,7 @@ def main():
                 well, int_bc, umi_bc,
                 internal_r, umi_r, all_r,
                 ambig, exon_r, inter_r, intron_r,
-                unmapped,
+                unmapped, other_unassigned,
                 f"{mapping_ratio:.6f}" if mapping_ratio != "" else "",
                 f"{exon_intron_ratio:.6f}" if exon_intron_ratio != "" else "",
                 f"{umi_frac:.6f}" if umi_frac != "" else "",

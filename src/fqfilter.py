@@ -268,7 +268,7 @@ def main():
     bam_out = samtools_proc.stdin
 
     # PG Header
-    pg_line = f"@PG\tID:MhsFlow-fqfilter\tPN:MhsFlow-fqfilter\tVN:3.0\tCL:python3 fqfilter.py {' '.join(sys.argv[1:])}\n"
+    pg_line = f"@PG\tID:MfsFlow-fqfilter\tPN:MfsFlow-fqfilter\tVN:3.0\tCL:python3 fqfilter.py {' '.join(sys.argv[1:])}\n"
     bam_out.write(pg_line.encode("utf-8"))
 
     total = 0

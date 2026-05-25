@@ -140,7 +140,7 @@ class PipelineRuntime:
         project = str(config.get("project", "sample"))
         safe_project = "".join(c if c.isalnum() or c in ("-", "_", ".") else "_" for c in project)
         out_hash = hashlib.sha1(os.path.abspath(out_dir).encode("utf-8")).hexdigest()[:10]
-        return os.path.join(os.path.abspath(tmp_root), f"mhsflow_{safe_project}_{out_hash}", "tmp_merge")
+        return os.path.join(os.path.abspath(tmp_root), f"mfsflow_{safe_project}_{out_hash}", "tmp_merge")
 
     def install_src_path(self):
         toolkit_src_dir = os.path.join(self.toolkit_dir, "src")

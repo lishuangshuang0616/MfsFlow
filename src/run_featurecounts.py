@@ -452,6 +452,39 @@ def saf_paths_from_prefix(out_prefix):
         "intron": f"{out_prefix}.intron.saf",
     }
 
+def build_featurecounts_cmd(
+    featurecounts_exec,
+    input_bam,
+    saf_file,
+    output_counts,
+    threads,
+    strand_mode,
+    read_layout,
+    fraction_overlap=0,
+    allow_multi_overlap=False,
+):
+    layout = str(read_layout or "PE").upper()
+    cmd = [
+        featurecounts_exec,
+        '-M',
+        '-a', saf_file,
+        '-F', 'SAF',
+        '-o', output_counts,
+        '-T', str(max(1, int(threads))),
+        '-R', 'BAM',
+        '-s', str(strand_mode),
+        '--primary',
+        '-Q', '0'
+    ]
+    if layout == "PE":
+        cmd.extend(['-p', '-C'])
+    if allow_multi_overlap:
+        cmd.append('-O')
+    if float(fraction_overlap) > 0:
+        cmd.extend(['--fracOverlap', str(fraction_overlap)])
+    cmd.extend(['--largestOverlap', input_bam])
+    return cmd
+
 def run_featurecounts_cmd(
     featurecounts_exec,
     input_bam,
@@ -460,6 +493,7 @@ def run_featurecounts_cmd(
     threads,
     strand_mode,
     feature_type,
+    read_layout="PE",
     fraction_overlap=0,
     allow_multi_overlap=False,
 ):
@@ -467,29 +501,20 @@ def run_featurecounts_cmd(
     Runs featureCounts.
     """
     threads = max(1, int(threads))
-    print(f"Running featureCounts for {feature_type} (Strand: {strand_mode}, Threads: {threads})...")
+    print(f"Running featureCounts for {feature_type} (Strand: {strand_mode}, Layout: {read_layout}, Threads: {threads})...")
     output_counts = f"{out_prefix}.counts.txt"
 
-    cmd = [
+    cmd = build_featurecounts_cmd(
         featurecounts_exec,
-        '-M',
-        '-a', saf_file,
-        '-F', 'SAF',
-        '-o', output_counts,
-        '-T', str(threads),
-        '-R', 'BAM',
-        '-s', str(strand_mode),
-        '-p',                # Enable Paired-End mode
-        '-C',
-        '--primary',
-        '-Q', '0'
-    ]
-    if allow_multi_overlap:
-        cmd.append('-O')
-    if float(fraction_overlap) > 0:
-        cmd.extend(['--fracOverlap', str(fraction_overlap)])
-
-    cmd.extend(['--largestOverlap', input_bam])
+        input_bam,
+        saf_file,
+        output_counts,
+        threads,
+        strand_mode,
+        read_layout,
+        fraction_overlap=fraction_overlap,
+        allow_multi_overlap=allow_multi_overlap,
+    )
 
     subprocess.check_call(cmd)
 
@@ -516,6 +541,7 @@ def run_featurecounts_r_order(
     threads,
     strand_mode,
     source_label,
+    read_layout="PE",
     count_introns=True,
     fraction_overlap=0,
     allow_multi_overlap=False,
@@ -535,6 +561,7 @@ def run_featurecounts_r_order(
         threads,
         strand_mode,
         f"{source_label}_Exon",
+        read_layout=read_layout,
         fraction_overlap=fraction_overlap,
         allow_multi_overlap=allow_multi_overlap,
     )
@@ -549,6 +576,7 @@ def run_featurecounts_r_order(
         threads,
         strand_mode,
         f"{source_label}_Intron",
+        read_layout=read_layout,
         fraction_overlap=fraction_overlap,
         allow_multi_overlap=allow_multi_overlap,
     )
@@ -597,6 +625,36 @@ def load_saf_interval_index(saf_file):
     for values in index.values():
         values.sort()
     return dict(index), {}
+
+
+def resolve_counting_strand_modes(counting_opts):
+    def _coerce(value, default):
+        try:
+            ivalue = int(value)
+        except Exception:
+            ivalue = default
+        return ivalue if ivalue in (0, 1, 2) else default
+
+    umi_mode = _coerce(counting_opts.get("strand", 1), 1)
+    internal_mode = _coerce(counting_opts.get("internal_strand", 0), 0)
+    return umi_mode, internal_mode
+
+
+def should_count_read(read_obj):
+    if isinstance(read_obj, str):
+        parts = read_obj.split('\t')
+        if len(parts) <= 1:
+            return False
+        flag = int(parts[1])
+        return (flag & 0x900) == 0
+    return not (read_obj.is_secondary or read_obj.is_supplementary)
+
+
+READ_CATEGORIES = {"Exon", "Intron", "Intergenic", "Ambiguity", "Unmapped"}
+
+
+def normalize_read_category(category):
+    return category if category in READ_CATEGORIES else "Other_Unassigned"
 
 
 def _candidate_introns(chrom, strand_mode, is_reverse, intron_index):
@@ -686,8 +744,11 @@ def process_bam_and_calculate_stats(
     intron_starts = intron_starts or {}
 
     def update_stats(read_obj, category, source_lbl):
+        category = normalize_read_category(category)
         bc = None
         if isinstance(read_obj, str):
+            if not should_count_read(read_obj):
+                return
             cb_idx = read_obj.find("CB:Z:")
             if cb_idx != -1:
                 end_cb = read_obj.find('\t', cb_idx)
@@ -695,27 +756,20 @@ def process_bam_and_calculate_stats(
                 bc = read_obj[cb_idx+5:end_cb].strip()
 
             if bc:
-                parts = read_obj.split('\t')
-                flag = int(parts[1])
-                is_r1 = (flag & 0x40) != 0
-                is_r2 = (flag & 0x80) != 0
-                if not (is_r1 or is_r2): is_r1 = True
-
-                if is_r1:
-                    read_stats[bc][category] += 1
-                    if source_lbl == 'UMI': read_stats[bc]['UMI_Reads'] += 1
-                    elif source_lbl == 'Internal': read_stats[bc]['Internal_Reads'] += 1
+                read_stats[bc][category] += 1
+                if source_lbl == 'UMI': read_stats[bc]['UMI_Reads'] += 1
+                elif source_lbl == 'Internal': read_stats[bc]['Internal_Reads'] += 1
 
         else: # pysam
+            if not should_count_read(read_obj):
+                return
             if read_obj.has_tag("CB"):
                 bc = read_obj.get_tag("CB")
-                if read_obj.is_read1:
-                    read_stats[bc][category] += 1
-                    if source_lbl == 'UMI': read_stats[bc]['UMI_Reads'] += 1
-                    elif source_lbl == 'Internal': read_stats[bc]['Internal_Reads'] += 1
+                read_stats[bc][category] += 1
+                if source_lbl == 'UMI': read_stats[bc]['UMI_Reads'] += 1
+                elif source_lbl == 'Internal': read_stats[bc]['Internal_Reads'] += 1
             else:
-                 if read_obj.is_read1:
-                     read_stats["__NO_CB__"]["Unused BC"] += 1
+                 read_stats["__NO_CB__"]["Unused BC"] += 1
 
     def update_coverage(read_obj, gene_models, cov_arr):
         if not collect_coverage or not gene_models: return False
@@ -756,7 +810,7 @@ def process_bam_and_calculate_stats(
                         pass
                     num = 0
         else:
-            blocks = read_obj.get_blocks()
+            blocks = [(start + 1, end) for start, end in read_obj.get_blocks()]
 
         if not blocks: return False
 
@@ -854,7 +908,7 @@ def process_bam_and_calculate_stats(
                         elif read.is_unmapped:
                              category = "Unmapped"
                         else:
-                             category = status
+                             category = normalize_read_category(status)
 
                     if source_label:
                         final_read.set_tag('SR', source_label)
@@ -953,7 +1007,7 @@ def process_bam_and_calculate_stats(
                                 category = "Intergenic"
                     else:
                         final_line = line.rstrip()
-                        category = status
+                        category = normalize_read_category(status)
                 else:
                     # Check unmapped flag
                     parts = line.split('\t')
@@ -1146,12 +1200,15 @@ def main():
 
     count_introns = bool(counting_opts.get("introns", True))
     featurecounts_strategy = str(counting_opts.get("featurecounts_strategy", "hybrid")).strip().lower()
+    read_layout = str(config.get('read_layout', 'PE') or 'PE').upper()
     use_r_order = featurecounts_strategy in {"r", "r_order", "two_pass", "exact"}
     fraction_overlap = counting_opts.get("fraction_overlap", 0)
     allow_multi_overlap = bool(counting_opts.get("multi_overlap", False))
+    umi_strand_mode, internal_strand_mode = resolve_counting_strand_modes(counting_opts)
     print(
         f"featureCounts opts: strategy={featurecounts_strategy}, "
-        f"multi_overlap={allow_multi_overlap}, fraction_overlap={fraction_overlap}"
+        f"multi_overlap={allow_multi_overlap}, fraction_overlap={fraction_overlap}, "
+        f"read_layout={read_layout}, umi_strand={umi_strand_mode}, internal_strand={internal_strand_mode}"
     )
     intron_index, intron_starts = ({}, {})
     if count_introns and not use_r_order:
@@ -1163,7 +1220,7 @@ def main():
     elif use_r_order:
         print("Using R-order counting: exon featureCounts followed by intron featureCounts.")
 
-    # Process Internal (Strand 0)
+    # Process Internal
     if os.path.exists(internal_bam):
         print("Running featureCounts for Internal Reads...")
         fc_prefix_int = internal_bam + ".fc"
@@ -1175,8 +1232,9 @@ def main():
                 saf_paths["intron"],
                 fc_prefix_int,
                 num_threads,
-                0,
+                internal_strand_mode,
                 "Internal",
+                read_layout=read_layout,
                 count_introns=count_introns,
                 fraction_overlap=fraction_overlap,
                 allow_multi_overlap=allow_multi_overlap,
@@ -1188,14 +1246,15 @@ def main():
                 saf_paths["exon"],
                 f"{fc_prefix_int}.exon",
                 num_threads,
-                0,
+                internal_strand_mode,
                 "Internal_Exon",
+                read_layout=read_layout,
                 fraction_overlap=fraction_overlap,
                 allow_multi_overlap=allow_multi_overlap,
             )
-        fc_outputs.append(("Internal", fc_out_int, 0))
+        fc_outputs.append(("Internal", fc_out_int, internal_strand_mode))
 
-    # Process UMI (Strand 1)
+    # Process UMI
     if os.path.exists(umi_bam):
         print("Running featureCounts for UMI Reads...")
         fc_prefix_umi = umi_bam + ".fc"
@@ -1207,8 +1266,9 @@ def main():
                 saf_paths["intron"],
                 fc_prefix_umi,
                 num_threads,
-                1,
+                umi_strand_mode,
                 "UMI",
+                read_layout=read_layout,
                 count_introns=count_introns,
                 fraction_overlap=fraction_overlap,
                 allow_multi_overlap=allow_multi_overlap,
@@ -1220,12 +1280,13 @@ def main():
                 saf_paths["exon"],
                 f"{fc_prefix_umi}.exon",
                 num_threads,
-                1,
+                umi_strand_mode,
                 "UMI_Exon",
+                read_layout=read_layout,
                 fraction_overlap=fraction_overlap,
                 allow_multi_overlap=allow_multi_overlap,
             )
-        fc_outputs.append(("UMI", fc_out_umi, 1))
+        fc_outputs.append(("UMI", fc_out_umi, umi_strand_mode))
 
     if not fc_outputs:
         print("Error: No BAMs processed.")

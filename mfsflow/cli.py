@@ -13,15 +13,15 @@ from pipeline_config import build_base_config, resolve_samplesheet_barcodes
 from run_config import write_run_config
 from path_layout import logs_dir
 
-from mhsflow.bootstrap import create_barcode_tables, create_output_dirs, process_fastq_inputs
-from mhsflow.config.validation import require_supported_python, validate_input_files
-from mhsflow.pipeline.runner import run_pipeline_stages
-from mhsflow.runtime import PipelineTimer, format_duration
-from mhsflow.stages import FILTERING, STAGE_ORDER
+from mfsflow.bootstrap import create_barcode_tables, create_output_dirs, process_fastq_inputs
+from mfsflow.config.validation import require_supported_python, validate_input_files
+from mfsflow.pipeline.runner import run_pipeline_stages
+from mfsflow.runtime import PipelineTimer, format_duration
+from mfsflow.stages import FILTERING, STAGE_ORDER
 
 
 def build_parser():
-    parser = argparse.ArgumentParser(description="Mhsflt Data Analysis Pipeline")
+    parser = argparse.ArgumentParser(description="MfsFlow Data Analysis Pipeline")
     parser.add_argument("--fastqs", required=True, help="Directory containing input R1/R2 FASTQ files")
     parser.add_argument("--samplesheet", help="CSV samplesheet for equal-length R1/R2 data")
     parser.add_argument("--genomeDir", required=True, help="Reference directory containing star/ and genes/genes.gtf")

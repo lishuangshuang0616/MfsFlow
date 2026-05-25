@@ -77,25 +77,40 @@ def discover_barcodes(bcstats_file, records, out_file, max_hamming=1, min_unique
                         seen.add(rec_key)
                         matches.append((1, rec))
 
-        for dist, rec in matches:
-            candidate_key = (rec["candidate_type"], rec["candidate_id"])
-            stats = candidate_stats[candidate_key]
-            stats["candidate_type"] = rec["candidate_type"]
-            stats["candidate_id"] = rec["candidate_id"]
-            stats["matched_reads"] += reads
-            stats["exact_reads" if dist == 0 else "hamming1_reads"] += reads
-            stats["matched_observed_barcodes"].add(obs_bc)
-            stats["matched_expected_barcodes"].add(rec["barcode"])
-            match_rows.append({
-                "candidate_type": rec["candidate_type"],
-                "candidate_id": rec["candidate_id"],
-                "wellID": rec["wellID"],
-                "barcode_type": rec["barcode_type"],
-                "observed_barcode": obs_bc,
-                "expected_barcode": rec["barcode"],
-                "hamming": dist,
-                "reads": reads,
-            })
+        if not matches:
+            continue
+
+        candidate_keys = {(rec["candidate_type"], rec["candidate_id"]) for dist, rec in matches}
+        if len(candidate_keys) != 1:
+            continue
+
+        dist, rec = sorted(
+            matches,
+            key=lambda item: (
+                item[0],
+                item[1]["wellID"],
+                item[1]["barcode_type"],
+                item[1]["barcode"],
+            ),
+        )[0]
+        candidate_key = (rec["candidate_type"], rec["candidate_id"])
+        stats = candidate_stats[candidate_key]
+        stats["candidate_type"] = rec["candidate_type"]
+        stats["candidate_id"] = rec["candidate_id"]
+        stats["matched_reads"] += reads
+        stats["exact_reads" if dist == 0 else "hamming1_reads"] += reads
+        stats["matched_observed_barcodes"].add(obs_bc)
+        stats["matched_expected_barcodes"].add(rec["barcode"])
+        match_rows.append({
+            "candidate_type": rec["candidate_type"],
+            "candidate_id": rec["candidate_id"],
+            "wellID": rec["wellID"],
+            "barcode_type": rec["barcode_type"],
+            "observed_barcode": obs_bc,
+            "expected_barcode": rec["barcode"],
+            "hamming": dist,
+            "reads": reads,
+        })
 
     summaries = []
     for key, stats in candidate_stats.items():

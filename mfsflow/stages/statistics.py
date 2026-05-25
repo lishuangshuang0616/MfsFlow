@@ -1,6 +1,6 @@
 import os
 
-from mhsflow.runtime import remove_path
+from mfsflow.runtime import remove_path
 
 
 def run_statistics_stage(runtime, run_stage_cmd):

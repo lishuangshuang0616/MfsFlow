@@ -5,7 +5,7 @@ import multiprocessing
 import os
 import subprocess
 
-from mhsflow.bootstrap import run_barcode_discovery
+from mfsflow.bootstrap import run_barcode_discovery
 from path_layout import barcode_dir, config_dir
 
 

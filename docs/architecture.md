@@ -1,22 +1,22 @@
-# MhsFlow Architecture
+# MfsFlow Architecture
 
-MhsFlow is moving from a script-oriented pipeline into a package-oriented
+MfsFlow is moving from a script-oriented pipeline into a package-oriented
 pipeline. The legacy scripts in `src/` are still used as executable stage tools,
-while orchestration and shared runtime code now live in `mhsflow/`.
+while orchestration and shared runtime code now live in `mfsflow/`.
 
 ## Entry Points
 
 - `run_analysis_pipeline.py`: compatibility launcher for existing command lines.
-- `mhsflow.cli`: canonical Python CLI implementation.
-- `mhsflow` console script: installed entry point defined in `pyproject.toml`.
+- `mfsflow.cli`: canonical Python CLI implementation.
+- `mfsflow` console script: installed entry point defined in `pyproject.toml`.
 
 ## Package Layout
 
-- `mhsflow.config`: input validation and future typed configuration models.
-- `mhsflow.bootstrap`: pre-run setup, output directory creation, barcode table creation.
-- `mhsflow.runtime`: runtime context, path derivation, timing, subprocess execution helpers.
-- `mhsflow.pipeline`: stage orchestration.
-- `mhsflow.stages`: stage-level orchestration for filtering, mapping, counting, and statistics.
+- `mfsflow.config`: input validation and future typed configuration models.
+- `mfsflow.bootstrap`: pre-run setup, output directory creation, barcode table creation.
+- `mfsflow.runtime`: runtime context, path derivation, timing, subprocess execution helpers.
+- `mfsflow.pipeline`: stage orchestration.
+- `mfsflow.stages`: stage-level orchestration for filtering, mapping, counting, and statistics.
 
 ## Legacy Tool Modules
 

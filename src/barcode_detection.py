@@ -119,13 +119,12 @@ def cell_bc_selection(bccount_df, config):
     barcodes_config = config['barcodes']
     min_reads = barcodes_config.get('nReadsperCell', 10)
     
-    # 1. Filter low reads
-    df = bccount_df[bccount_df['n'] >= min_reads].copy()
-    
-    # 2. Sort Deterministically: Descending N, then Ascending XC (alphabetical)
-    # This ensures consistency even when N is identical.
+    # Keep the full barcode table so downstream Hamming rescue can still see
+    # low-count tail barcodes. Selection itself is still thresholded.
+    df = bccount_df.copy()
     df = df.sort_values(by=['n', 'XC'], ascending=[False, True]).reset_index(drop=True)
     df['keep'] = False
+    eligible = df[df['n'] >= min_reads].copy()
     
     strategy_auto = barcodes_config.get('automatic', False)
     bc_num = barcodes_config.get('barcode_num', None)
@@ -142,19 +141,20 @@ def cell_bc_selection(bccount_df, config):
     if bc_file and strategy_auto:
         # Strategy: Automatic Knee + Whitelist Intersection
         print("Strategy: Automatic + Whitelist Intersection")
-        cutoff = find_knee_point(df['n'].values)
+        cutoff = find_knee_point(eligible['n'].values)
         print(f"  Automatic cutoff: {cutoff} reads")
         
         # Mark potential cells by cutoff
-        potential_keep = df['n'] >= cutoff
+        potential_keep = eligible['n'] >= cutoff
         
         # Filter those by whitelist
         # We strictly check if the potential high-read BC is in whitelist
-        valid_in_whitelist = df.loc[potential_keep, 'XC'].isin(whitelist)
+        valid_in_whitelist = eligible.loc[potential_keep, 'XC'].isin(whitelist)
         
         if valid_in_whitelist.any():
             # If we have intersection, keep them
-            df.loc[potential_keep & df['XC'].isin(whitelist), 'keep'] = True
+            selected = set(eligible.loc[potential_keep & eligible['XC'].isin(whitelist), 'XC'])
+            df.loc[df['XC'].isin(selected), 'keep'] = True
         else:
             raise ValueError(
                 "Automatic detection found no overlap with whitelist. "
@@ -164,9 +164,11 @@ def cell_bc_selection(bccount_df, config):
     elif bc_file and not strategy_auto:
         # Strategy: Strict Whitelist
         print("Strategy: Known Whitelist")
-        df['keep'] = df['XC'].isin(whitelist)
-        
-        if not df['keep'].any():
+        observed_in_whitelist = df['XC'].isin(whitelist)
+        eligible_in_whitelist = eligible['XC'].isin(whitelist)
+        df['keep'] = df['XC'].isin(set(eligible.loc[eligible_in_whitelist, 'XC']))
+
+        if not observed_in_whitelist.any():
             raise ValueError(
                 "None of the annotated barcodes were detected. "
                 "The pipeline will not fall back to top barcodes for manual/plate/custom modes; "
@@ -176,21 +178,24 @@ def cell_bc_selection(bccount_df, config):
     elif bc_num is not None:
         # Strategy: Fixed Number
         print(f"Strategy: Fixed Number ({bc_num})")
-        limit = min(int(bc_num), len(df))
-        df.iloc[:limit, df.columns.get_loc('keep')] = True
+        limit = min(int(bc_num), len(eligible))
+        selected = set(eligible.iloc[:limit]['XC'])
+        df.loc[df['XC'].isin(selected), 'keep'] = True
         
     else:
         # Strategy: Automatic (Knee)
         print("Strategy: Automatic (Knee method)")
-        cutoff = find_knee_point(df['n'].values)
+        cutoff = find_knee_point(eligible['n'].values)
         print(f"  Automatic cutoff: {cutoff} reads")
-        df['keep'] = df['n'] >= cutoff
+        selected = set(eligible.loc[eligible['n'] >= cutoff, 'XC'])
+        df.loc[df['XC'].isin(selected), 'keep'] = True
         
         # Fallback for too few cells
         if df['keep'].sum() < 10:
              print("  Warning: < 10 cells found. Using top 100 fallback.")
-             limit = min(100, len(df))
-             df.iloc[:limit, df.columns.get_loc('keep')] = True
+             limit = min(100, len(eligible))
+             selected = set(eligible.iloc[:limit]['XC'])
+             df.loc[df['XC'].isin(selected), 'keep'] = True
 
     print(f"Selected {df['keep'].sum()} cell barcodes.")
     return df
@@ -349,7 +354,7 @@ def fast_hamming_binning(true_bcs, candidate_bcs, threshold=1, threads=1):
     return final_df, raw_df
 
 def main():
-    parser = argparse.ArgumentParser(description="Barcode detection for MhsFlow")
+    parser = argparse.ArgumentParser(description="Barcode detection for MfsFlow")
     parser.add_argument('yaml_config', help="Path to run config YAML file")
     args = parser.parse_args()
     
@@ -402,10 +407,8 @@ def main():
 
     if do_binning and len(kept_df) > 0:
         true_bcs = kept_df['XC'].values
-        min_reads = bc_opts.get('nReadsperCell', 0)
-        
-        # Candidates: Not kept, but > min_reads
-        candidates_df = df_processed[~df_processed['keep'] & (df_processed['n'] >= min_reads)]
+        # Candidates: all non-kept barcodes, including low-count tail barcodes.
+        candidates_df = df_processed[~df_processed['keep']]
         candidates_bcs = candidates_df['XC'].values
         
         if len(candidates_bcs) > 0:

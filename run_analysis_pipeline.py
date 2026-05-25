@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-from mhsflow.cli import main
+from mfsflow.cli import main
 
 
 if __name__ == "__main__":

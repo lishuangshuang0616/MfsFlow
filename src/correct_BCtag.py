@@ -37,8 +37,8 @@ def main():
     # Prepare header
     header = infile.header.to_dict()
     pg_entry = {
-        'ID': 'MhsFlow-correct_BCtag',
-        'PN': 'MhsFlow-correct_BCtag',
+        'ID': 'MfsFlow-correct_BCtag',
+        'PN': 'MfsFlow-correct_BCtag',
         'VN': '3.0-pysam-mgi-custom',
         'CL': 'python3 ' + ' '.join(sys.argv)
     }

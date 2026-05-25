@@ -3,11 +3,11 @@ import sys
 
 import yaml
 
-from mhsflow.runtime import PipelineRuntime, PipelineTimer, Tee, run_stage_cmd as run_timed_stage_cmd
-from mhsflow.stages.counting import run_counting_stage
-from mhsflow.stages.filtering import run_filtering_stage
-from mhsflow.stages.mapping import run_mapping_stage
-from mhsflow.stages.statistics import run_statistics_stage
+from mfsflow.runtime import PipelineRuntime, PipelineTimer, Tee, run_stage_cmd as run_timed_stage_cmd
+from mfsflow.stages.counting import run_counting_stage
+from mfsflow.stages.filtering import run_filtering_stage
+from mfsflow.stages.mapping import run_mapping_stage
+from mfsflow.stages.statistics import run_statistics_stage
 
 
 def run_pipeline_stages(yaml_file):

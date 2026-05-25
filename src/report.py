@@ -67,6 +67,9 @@ _CANONICAL_STATS_KEYS = {
     "exon_genes": "Exon_genes",
     "intron_genes": "Intron_genes",
     "intron_exon_genes": "Intron_Exon_genes",
+    "exon_read_genes": "Exon_read_genes",
+    "intron_read_genes": "Intron_read_genes",
+    "intron_exon_read_genes": "Intron_Exon_read_genes",
     "exon_umis": "Exon_umis",
     "intron_umis": "Intron_umis",
     "intron_exon_umis": "Intron_Exon_umis",
@@ -143,6 +146,24 @@ def _fmt_pct(value):
     return f"{n * 100.0:.1f}%"
 
 
+def _infer_transcriptome_label(reference_config):
+    if not isinstance(reference_config, dict):
+        return "Unknown"
+    for key in ("transcriptome_name", "transcriptome", "reference_name"):
+        value = str(reference_config.get(key) or "").strip()
+        if value:
+            return value
+
+    star_index = str(reference_config.get("STAR_index") or "").strip()
+    if not star_index:
+        return "Unknown"
+    path = Path(star_index.rstrip("/"))
+    name = path.name
+    if name.lower() in {"star", "star_index", "starindex", "index", "genome"} and path.parent.name:
+        return path.parent.name
+    return name or "Unknown"
+
+
 def _median(values):
     vals = [float(v) for v in values if v is not None]
     if not vals:
@@ -195,6 +216,7 @@ def _process_barcode_report_data(sample_outdir, combined_context, config):
     umi_reads = []
     internal_reads = []
     genes = []
+    read_genes = []
     umis = []
     mapping_ratios = []
     active = 0
@@ -223,6 +245,10 @@ def _process_barcode_report_data(sample_outdir, combined_context, config):
         if gene_val is None:
             gene_val = _to_float(row.get("Exon_genes"))
         genes.append(gene_val)
+        read_gene_val = _to_float(row.get("Intron_Exon_read_genes"))
+        if read_gene_val is None:
+            read_gene_val = _to_float(row.get("Exon_read_genes"))
+        read_genes.append(read_gene_val)
         umi_val = _to_float(row.get("Intron_Exon_umis"))
         if umi_val is None:
             umi_val = _to_float(row.get("Exon_umis"))
@@ -242,14 +268,15 @@ def _process_barcode_report_data(sample_outdir, combined_context, config):
         plate = _well_plate_id(well)
         if plate:
             plate_ids.add(plate)
-            bucket = plate_summary.setdefault(plate, {"plate": plate, "expected_wells": 0, "active_wells": 0, "reads": [], "genes": [], "umis": []})
+            bucket = plate_summary.setdefault(plate, {"plate": plate, "expected_wells": 0, "active_wells": 0, "reads": [], "genes": [], "read_genes": [], "umis": []})
             bucket["active_wells"] += 1 if all_reads > 0 else 0
             bucket["reads"].append(all_reads)
             bucket["genes"].append(gene_val)
+            bucket["read_genes"].append(read_gene_val)
             bucket["umis"].append(umi_val)
 
         expected = expected_by_well.get(well, {})
-        # Calculate UMI fraction and Exon+Intron ratio for manual report
+        # Calculate UMI fraction and exon/intron ratio for manual report.
         umi_fraction = (umi / all_reads) if all_reads and all_reads > 0 else None
         exon_r = _to_float(row.get("Exon_reads")) or 0.0
         intron_r = _to_float(row.get("intron_reads")) or _to_float(row.get("Intron_reads")) or 0.0
@@ -262,6 +289,7 @@ def _process_barcode_report_data(sample_outdir, combined_context, config):
             "umi_reads": int(umi),
             "internal_reads": int(internal),
             "genes": int(gene_val) if gene_val is not None else "",
+            "read_genes": int(read_gene_val) if read_gene_val is not None else "",
             "umis": int(umi_val) if umi_val is not None else "",
             "mapping_ratio": mapping,
             "UMIfrac": umi_fraction,
@@ -278,7 +306,7 @@ def _process_barcode_report_data(sample_outdir, combined_context, config):
             plate = _well_plate_id(row.get("wellID"))
             if plate:
                 plate_ids.add(plate)
-                bucket = plate_summary.setdefault(plate, {"plate": plate, "expected_wells": 0, "active_wells": 0, "reads": [], "genes": [], "umis": []})
+                bucket = plate_summary.setdefault(plate, {"plate": plate, "expected_wells": 0, "active_wells": 0, "reads": [], "genes": [], "read_genes": [], "umis": []})
                 bucket["expected_wells"] += 1
     else:
         for plate in plate_summary:
@@ -299,6 +327,7 @@ def _process_barcode_report_data(sample_outdir, combined_context, config):
         "total_reads": total_read_sum,
         "median_reads": _median(total_reads),
         "median_genes": _median(genes),
+        "median_read_genes": _median(read_genes),
         "median_umis": _median(umis),
         "median_mapping_ratio": _median(mapping_ratios),
         "umi_fraction": (umi_read_sum / total_read_sum) if total_read_sum > 0 else None,
@@ -309,7 +338,7 @@ def _process_barcode_report_data(sample_outdir, combined_context, config):
         {"label": "Expected wells", "value": _fmt_int(summary["expected_wells"])},
         {"label": "Active wells", "value": _fmt_int(summary["active_wells"])},
         {"label": "Median reads", "value": _fmt_int(summary["median_reads"])},
-        {"label": "Median genes", "value": _fmt_int(summary["median_genes"])},
+        {"label": "Median genes (UMIs)", "value": _fmt_int(summary["median_genes"])},
         {"label": "Median mapping", "value": _fmt_pct(summary["median_mapping_ratio"])},
     ]
 
@@ -324,6 +353,7 @@ def _process_barcode_report_data(sample_outdir, combined_context, config):
             "active_fraction": (item["active_wells"] / expected) if expected else None,
             "median_reads": _median(item["reads"]),
             "median_genes": _median(item["genes"]),
+            "median_read_genes": _median(item.get("read_genes", [])),
             "median_umis": _median(item["umis"]),
         })
 
@@ -479,7 +509,7 @@ def create_report_directories(sample_outdir, _config=None):
     """
     sample_path = Path(sample_outdir)
 
-    # For Mhsflt_toolkit, we might not need strict directory structure for REPORT 
+    # For MfsFlow, we might not need strict directory structure for REPORT 
     # if we are just generating one HTML, but we'll keep it for consistency.
     # Locate pipeline output tables from the current directory layout.
     
@@ -630,15 +660,8 @@ def get_omics_data(outdir, _sample, config):
             stat = calculate_summary_metrics(outdir, project=str(project))
             
             # Metadata
-            rna_section = config.get('reference', {}) # In new pipeline config, genomeDir is in reference
-            # Try to guess species from genome dir path
-            genome_dir = rna_section.get('STAR_index', '')
-            species = 'Unknown'
-            if 'human' in str(genome_dir).lower() or 'hg' in str(genome_dir).lower():
-                species = 'Homo sapiens'
-            elif 'mouse' in str(genome_dir).lower() or 'mm' in str(genome_dir).lower():
-                species = 'Mus musculus'
-            stat['rna_species'] = species
+            rna_section = config.get('reference', {})
+            stat['rna_species'] = _infer_transcriptome_label(rna_section)
             
             omics_data['rna'] = {'stat': stat, 'plot_dict': {}, 'table': None}
             

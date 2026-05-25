@@ -3,13 +3,13 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from mhsflow.cli import build_parser
-from mhsflow.runtime import PipelineRuntime, format_duration
-from mhsflow.stages import COUNTING, FILTERING, MAPPING, STAGE_ORDER, SUMMARISING
+from mfsflow.cli import build_parser
+from mfsflow.runtime import PipelineRuntime, format_duration
+from mfsflow.stages import COUNTING, FILTERING, MAPPING, STAGE_ORDER, SUMMARISING
 from src.report import _select_report_template
 
 
-class MhsflowPackageTests(unittest.TestCase):
+class MfsflowPackageTests(unittest.TestCase):
     def test_stage_order_is_stable(self):
         self.assertEqual(STAGE_ORDER, (FILTERING, MAPPING, COUNTING, SUMMARISING))
 

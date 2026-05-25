@@ -1,4 +1,4 @@
-# Fixed parameters for Mhsflt_toolkit pipeline
+# Fixed parameters for MfsFlow pipeline
 
 # Default configuration structure
 DEFAULT_CONFIG = {
@@ -51,6 +51,7 @@ DEFAULT_CONFIG = {
         "introns": True,
         "downsampling": "0",
         "strand": 1,
+        "internal_strand": 0,
         "Ham_Dist": 1,
         "velocyto": False,
         "primaryHit": True,

@@ -101,6 +101,20 @@ def get_stream_corrected_read_length(bam_files, bc_bin_file, expect_id_file, tar
     return lengths.most_common(1)[0][0]
 
 
+def determine_target_read_length(bam_files, target_type, streams_raw_chunks, bc_bin_file, expect_id_file, samtools):
+    read_len = 0
+    if streams_raw_chunks and bam_files:
+        read_len = get_stream_corrected_read_length(
+            bam_files,
+            bc_bin_file,
+            expect_id_file,
+            target_type,
+        )
+    if read_len <= 0 and bam_files:
+        read_len = get_bam_read_length(bam_files[0], samtools)
+    return read_len
+
+
 def get_dir_size_gb(path):
     try:
         out = subprocess.check_output(['du', '-sk', path], text=True).split('\t', 1)[0]
@@ -132,6 +146,14 @@ def read_star_index_params(star_index):
     return params
 
 
+def read_star_index_chromosomes(star_index):
+    chr_file = os.path.join(star_index, "chrName.txt")
+    if not os.path.exists(chr_file):
+        return set()
+    with open(chr_file, "r") as handle:
+        return {line.strip() for line in handle if line.strip()}
+
+
 def star_index_has_embedded_sjdb(index_params):
     for key in ("sjdbGTFfile", "sjdbFileChrStartEnd", "sjdbInsertSave"):
         value = index_params.get(key, "")
@@ -140,10 +162,32 @@ def star_index_has_embedded_sjdb(index_params):
     overhang = index_params.get("sjdbOverhang", "")
     return bool(overhang and overhang not in ("-", "None", "0"))
 
+
+def build_star_misc_base(star_index, num_threads, read_layout, index_has_sjdb, final_gtf, read_len):
+    misc_parts = [
+        f"--genomeDir {star_index}",
+        f"--runThreadN {num_threads}",
+        f"--readFilesType SAM {read_layout}",
+        "--outSAMmultNmax 1",
+        "--outFilterMultimapNmax 50",
+        "--outSAMunmapped Within",
+        "--outSAMtype BAM Unsorted",
+        "--limitOutSJcollapsed 5000000",
+    ]
+    if not index_has_sjdb:
+        if read_len <= 0:
+            raise ValueError("Unable to determine read length required for STAR sjdbOverhang.")
+        misc_parts.insert(1, f"--sjdbGTFfile {final_gtf}")
+        misc_parts.insert(2, f"--sjdbOverhang {read_len - 1}")
+    return " ".join(misc_parts)
+
 def setup_gtf(config, project, out_dir, samtools):
     # Handle additional files
     gtf = config['reference']['GTF_file']
     additional_files = config['reference'].get('additional_files', [])
+    if isinstance(additional_files, str):
+        additional_files = [additional_files] if additional_files.strip() else []
+    star_index = config['reference'].get('STAR_index', '')
     if not additional_files:
         final_gtf = os.path.join(out_dir, f"{project}.final_annot.gtf")
         shutil.copyfile(gtf, final_gtf)
@@ -151,6 +195,7 @@ def setup_gtf(config, project, out_dir, samtools):
     
     # Process additional fasta
     add_gtf_path = os.path.join(out_dir, "additional_sequence_annot.gtf")
+    additional_chroms = set()
     with open(add_gtf_path, 'w') as out_f:
         for fa in additional_files:
             # Get lengths using samtools faidx
@@ -163,10 +208,20 @@ def setup_gtf(config, project, out_dir, samtools):
                     parts = line.split('\t')
                     name = parts[0]
                     length = parts[1]
+                    additional_chroms.add(name)
                     # Write custom GTF line
                     # R code: gene_id "name"; transcript_id "name"; ...
                     attr = f'gene_id "{name}"; transcript_id "{name}"; exon_number "1"; gene_name "{name}"; gene_biotype "User"; transcript_name "{name}"; exon_id "{name}"'
                     out_f.write(f"{name}\tUser\texon\t1\t{length}\t.\t+\t.\t{attr}\n")
+
+    index_chroms = read_star_index_chromosomes(star_index)
+    missing_from_index = sorted(additional_chroms - index_chroms)
+    if missing_from_index:
+        raise ValueError(
+            "additional_files contigs must already be included in the STAR index. "
+            "Rebuild STAR_index before mapping. Missing contigs: "
+            + ", ".join(missing_from_index)
+        )
 
     final_gtf = os.path.join(out_dir, f"{project}.final_annot.gtf")
     with open(final_gtf, 'w') as outfile:
@@ -177,8 +232,7 @@ def setup_gtf(config, project, out_dir, samtools):
         with open(add_gtf_path, 'r') as infile:
             shutil.copyfileobj(infile, outfile)
             
-    param_add = f"--genomeFastaFiles {' '.join(additional_files)}"
-    return final_gtf, param_add
+    return final_gtf, ""
 
 def run_star_pipe(corrector_args, star_cmd_str):
     """
@@ -281,19 +335,28 @@ def main():
     if not os.path.exists(bc_bin_file):
         bc_bin_file = os.devnull
 
-    # 3. Determine Read Length (after correction if raw chunks are streamed)
-    read_len = 0
     streams_raw_chunks = any(os.path.basename(x).endswith(".raw.tagged.bam") for x in (umi_bams + internal_bams))
-    if streams_raw_chunks and umi_bams:
-        read_len = get_stream_corrected_read_length(umi_bams, bc_bin_file, expect_id_file, "umi")
-    if read_len <= 0 and streams_raw_chunks and internal_bams:
-        read_len = get_stream_corrected_read_length(internal_bams, bc_bin_file, expect_id_file, "internal")
-    if read_len <= 0 and umi_bams:
-        read_len = get_bam_read_length(umi_bams[0], samtools)
-    elif read_len <= 0 and internal_bams:
-        read_len = get_bam_read_length(internal_bams[0], samtools)
+    umi_read_len = determine_target_read_length(
+        umi_bams,
+        "umi",
+        streams_raw_chunks,
+        bc_bin_file,
+        expect_id_file,
+        samtools,
+    ) if umi_bams else 0
+    internal_read_len = determine_target_read_length(
+        internal_bams,
+        "internal",
+        streams_raw_chunks,
+        bc_bin_file,
+        expect_id_file,
+        samtools,
+    ) if internal_bams else 0
 
-    print(f"Detected Read Length: {read_len}")
+    if umi_read_len > 0:
+        print(f"Detected UMI Read Length: {umi_read_len}")
+    if internal_read_len > 0:
+        print(f"Detected Internal Read Length: {internal_read_len}")
     if index_has_sjdb:
         print("Detected STAR index already contains sjdb/GTF annotation; skipping on-the-fly --sjdbGTFfile injection.")
     else:
@@ -304,24 +367,6 @@ def main():
 
     # 5. Build STAR Commands
     read_layout = config.get('read_layout', 'SE')
-    
-    # Base params (Common)
-    # Important: readFilesType SAM because our corrector outputs uncompressed BAM (which STAR treats as SAM/BAM stream)
-    # STAR auto-detects BAM vs SAM if we say SAM usually, or we can use BAM Unsorted
-    misc_parts = [
-        f"--genomeDir {star_index}",
-        f"--runThreadN {num_threads}",
-        f"--readFilesType SAM {read_layout}",
-        "--outSAMmultNmax 1",
-        "--outFilterMultimapNmax 50",
-        "--outSAMunmapped Within",
-        "--outSAMtype BAM Unsorted",
-        "--limitOutSJcollapsed 5000000",
-    ]
-    if not index_has_sjdb:
-        misc_parts.insert(1, f"--sjdbGTFfile {final_gtf}")
-        misc_parts.insert(2, f"--sjdbOverhang {read_len - 1}")
-    misc_base = " ".join(misc_parts)
     
     extra_params = config['reference'].get('additional_STAR_params', '') or ""
     
@@ -339,6 +384,7 @@ def main():
         
         # STAR Command (Consumer)
         # --readFilesIn /dev/stdin
+        misc_base = build_star_misc_base(star_index, num_threads, read_layout, index_has_sjdb, final_gtf, umi_read_len)
         cmd_umi = f"{star_exec} {misc_base} {extra_params} {param_add_fa} {twopass} --readFilesIn /dev/stdin --outFileNamePrefix {prefix_umi}"
         
         run_star_pipe(corrector_args, cmd_umi)
@@ -352,6 +398,7 @@ def main():
         corrector_args = [sys.executable or 'python3', corrector_script, '--binning', bc_bin_file, '--idmap', expect_id_file, '--type', 'internal'] + internal_bams
         
         # STAR Command
+        misc_base = build_star_misc_base(star_index, num_threads, read_layout, index_has_sjdb, final_gtf, internal_read_len)
         cmd_int = f"{star_exec} {misc_base} {extra_params} {param_add_fa} {twopass} --readFilesIn /dev/stdin --outFileNamePrefix {prefix_int}"
         
         run_star_pipe(corrector_args, cmd_int)

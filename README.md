@@ -1,50 +1,83 @@
-# MhsFlow
+# MfsFlow
 
-**MhsFlow** is a comprehensive and flexible pipeline designed for processing high-sensitivity full-length transcriptome data, automated to handle workflows from raw FASTQ data to gene expression quantification and optimized for MGI sequencing chemistry.
+**MfsFlow** is a comprehensive and flexible pipeline designed for processing high-sensitivity full-length transcriptome data. It is optimized for MGI sequencing chemistry and provides an end-to-end workflow from raw FASTQ data to gene expression quantification.
 
-## Features
+## 🌟 Features
 
-- **End-to-End Pipeline**: Handles filtering, mapping, counting, and statistical analysis.
-- **Simple CLI Configuration**: Customer-facing parameters are passed on the command line; a run YAML is generated automatically for provenance.
-- **Multi-Species Support**: Optimized for Human and Mouse genomes.
-- **Efficient Processing**: Distinct stages for Filtering, Mapping, Counting, and Summarising.
-- **Detailed Reporting**: Generates comprehensive statistics and analysis results.
+- **End-to-End Pipeline**: Complete workflow including filtering, mapping, counting, and statistical analysis
+- **Dual Report Modes**: Automatic and manual report generation for different analysis scenarios
+- **Multi-Species Support**: Optimized for Human and Mouse genomes
+- **Flexible Barcode Modes**: Support for plate-based, manual, and discovery barcode modes
+- **Efficient Processing**: Streaming barcode correction and optimized parallel processing
+- **Detailed Reporting**: Comprehensive HTML reports with interactive plots and QC metrics
+- **MEX & H5AD Output**: Standard MEX format and AnnData (H5AD) for seamless downstream analysis
 
-## Prerequisites
+## 📋 Prerequisites
 
 Ensure you have the following installed on your system:
 
+### System Requirements
 - **Python 3.8+**
-- **Python packages**: Install via pip:
-  ```bash
-  pip install -r requirements.txt
-  ```
-- **STAR**: For genome alignment.
-- **Samtools**: For BAM file manipulation.
-- **Pigz**: For parallel gzip compression.
-- **Seqkit**: For FASTQ manipulation.
-- **FeatureCounts**: For read counting.
+- **Linux/Unix** environment (recommended for production)
 
-## Installation
+### Bundled Tools
+MfsFlow comes with bundled bioinformatics tools in the `software/` directory:
+- **STAR**: For genome alignment
+- **Samtools**: For BAM file manipulation
+- **Pigz**: For parallel gzip compression
+- **Seqkit**: For FASTQ manipulation
+- **FeatureCounts** (from Subread): For read counting
 
-1.  **Clone the Repository**
-    ```bash
-    git clone https://github.com/Yzh25/Mhsflt_toolkit.git
-    cd Mhsflt_toolkit
-    ```
+The pipeline automatically resolves these tools from the `software/` directory on Linux systems. No manual installation required.
 
-2.  **Environment Setup**
-    The toolkit relies on specific directory structures and environment settings. Run the release script to initialize the environment:
-    ```bash
-    sh release_env.sh
-    ```
+### Python Dependencies
+Install via pip:
+```bash
+pip install -r requirements.txt
+```
 
-## Reference
+Required Python packages:
+- PyYAML>=5.1
+- pysam>=0.21
+- numpy>=1.20
+- pandas>=1.3
+- scipy>=1.7
+- matplotlib>=3.5
+- anndata>=0.8
+- h5py>=3.1
 
-1.  **Build Reference Index**
-    Download the genome sequence (FASTA) and gene annotation (GTF) files from [GENCODE](https://www.gencodegenes.org). Build the genome index using STAR.
+**Note**: All packages use open version ranges for maximum compatibility. If you encounter dependency conflicts, you can adjust versions as needed.
 
-## Usage
+## 🚀 Installation
+
+### 1. Clone the Repository
+```bash
+git clone https://github.com/lishuangshuang0616/MfsFlow.git
+cd MfsFlow
+```
+
+### 2. Install Python Dependencies
+```bash
+pip install -r requirements.txt
+```
+
+### 3. Install in Development Mode (Optional)
+```bash
+pip install -e .
+```
+
+This will install the `mfsflow` command-line tool.
+
+### 4. Set Up External Tools
+Ensure STAR, Samtools, Pigz, Seqkit, and FeatureCounts are in your PATH, or specify their locations in the configuration.
+
+Reference databases can be built with STAR directly, or prepared from compatible
+DNBelab C Series (`dnbc4tools`) and Cell Ranger references. The expected layout is
+`<genomeDir>/star` for the STAR index and `<genomeDir>/genes/genes.gtf` for the GTF.
+
+## 📚 Quick Start
+
+### Basic Usage
 
 Run the analysis pipeline with command-line parameters:
 
@@ -58,16 +91,26 @@ python3 run_analysis_pipeline.py \
   --threads 20
 ```
 
-By default, the pipeline expects STAR index at `<genomeDir>/star` and GTF at `<genomeDir>/genes/genes.gtf`.
-The pipeline generates `XPRESS_PROCESSING/config/run_config.yaml` automatically for reproducibility.
+Or use the installed CLI:
 
-Input modes:
+```bash
+mfsflow \
+  --fastqs /path/to/fastq_dir \
+  --genomeDir /path/to/reference \
+  --sample SAMPLE_NAME \
+  --plate 1 \
+  --outdir /path/to/output \
+  --threads 20
+```
 
-- If R2 is 20 bp longer than R1, the last 20 bp of R2 are treated as the read barcode.
-- If R1 and R2 have the same length, provide `--samplesheet`; barcode is assigned per FASTQ pair.
-- Other read length structures are rejected.
+### Input Modes
 
-Samplesheet format for equal-length R1/R2 data:
+The pipeline supports two input modes based on read structure:
+
+1. **R2 is 20bp longer than R1**: The last 20bp of R2 are treated as the read barcode
+2. **R1 and R2 have the same length**: Provide `--samplesheet`; barcode is assigned per FASTQ pair
+
+#### Samplesheet Format (Equal-Length R1/R2)
 
 ```csv
 read1,read2,barcode
@@ -75,38 +118,117 @@ A_R1.fq.gz,A_R2.fq.gz,ACGTACGTACGTACGTACGT
 B_R1.fq.gz,B_R2.fq.gz,TGCATGCATGCATGCATGCA
 ```
 
-The barcode sequence is looked up in the expected barcode table generated from
-`--plate`, `--manual`, or `--expectBarcode`. The pipeline derives the well ID
-and whether the FASTQ pair is UMI or internal from that lookup.
+### Barcode Modes
 
-Barcode modes:
+Choose one of the following barcode selection modes:
 
 ```bash
---plate 1                  # automatic plate barcode list
---manual 20,21             # manual barcode IDs
+# Plate mode (automatic barcode list)
+--plate 1
+
+# Manual mode (specify barcode IDs)
+--manual 20,21,22,23,24
+
+# Custom barcode file
 --expectBarcode barcodes.tsv
---discoverBarcodes         # infer plate/manual barcode set from observed reads
+
+# Discover barcodes from observed reads
+--discoverBarcodes
 ```
 
-For `--manual`, `--plate`, and `--expectBarcode`, barcode detection is strict:
-if none of the expected barcodes are observed, the run stops instead of falling
-back to top-count barcodes. `--discoverBarcodes` compares observed read barcodes
-against the bundled manual/plate barcode lists with exact/Hamming-1 matching,
-writes a discovery report, then continues with the inferred barcode set.
+**Note**: For `--manual`, `--plate`, and `--expectBarcode`, barcode detection is strict. If none of the expected barcodes are observed, the run stops instead of falling back to top-count barcodes. `--discoverBarcodes` compares observed read barcodes against the bundled manual/plate barcode lists with exact/Hamming-1 matching, writes a discovery report, then continues with the inferred barcode set.
 
-## Output Structure
+## 📖 Documentation
+
+Comprehensive documentation is available in the `docs/` directory:
+
+- [**User Guide**](docs/user_guide.md): Detailed usage instructions and workflow explanation
+- [**Installation Guide**](docs/installation.md): Step-by-step installation instructions
+- [**Configuration Reference**](docs/configuration.md): Complete configuration options
+- [**Output Files**](docs/output.md): Description of all output files
+- [**Result Usage**](docs/output.md#expression-files): How to read H5AD and MEX outputs
+- [**Troubleshooting**](docs/troubleshooting.md): Common issues and solutions
+- [**Architecture**](docs/architecture.md): Technical architecture and design
+
+## 📁 Output Structure
 
 Results are saved under your specified `out_dir`:
 
-- `XPRESS_PROCESSING/config/`: Generated run configuration and expected barcode tables.
-- `XPRESS_PROCESSING/logs/`: Pipeline logs.
-- `XPRESS_PROCESSING/barcodes/`: Kept barcodes, barcode binning, and barcode discovery report.
-- `XPRESS_PROCESSING/expression/`: MEX matrices and `<project>.h5ad`.
-- `XPRESS_PROCESSING/stats/`: QC tables, Q30 statistics, and plots.
-- `XPRESS_PROCESSING/<project>.filtered.Aligned.GeneTagged.UBcorrected.sorted.bam`: Final UB-corrected sorted BAM.
-- `XPRESS_PROCESSING/intermediate/`: Temporary BAM and split FASTQ working files.
-- `outs/`: Final reports and customer-facing outputs.
+```
+output_directory/
+├── XPRESS_PROCESSING/
+│   ├── config/              # Generated run configuration and expected barcode tables
+│   ├── logs/               # Pipeline logs
+│   ├── barcodes/           # Kept barcodes, barcode binning, and discovery report
+│   ├── expression/         # MEX matrices and <project>.h5ad
+│   ├── stats/              # QC tables, Q30 statistics, and plots
+│   ├── intermediate/       # Temporary BAM and split FASTQ working files
+│   └── *.bam              # Final UB-corrected sorted BAM
+└── outs/                   # Final reports and customer-facing outputs
+    ├── auto_report.html    # Automatic report
+    └── manual_report.html  # Manual report
+```
 
-## License
+## 🔧 Advanced Usage
+
+### Resume from a Specific Stage
+
+```bash
+mfsflow \
+  --fastqs /path/to/fastq_dir \
+  --genomeDir /path/to/reference \
+  --sample SAMPLE_NAME \
+  --plate 1 \
+  --outdir /path/to/output \
+  --threads 20 \
+  --stage Mapping
+```
+
+Available stages: `Filtering`, `Mapping`, `Counting`, `Summarising`
+
+### Use Temporary Directory in Memory
+
+```bash
+mfsflow \
+  --fastqs /path/to/fastq_dir \
+  --genomeDir /path/to/reference \
+  --sample SAMPLE_NAME \
+  --plate 1 \
+  --outdir /path/to/output \
+  --threads 20 \
+  --tmpRoot /dev/shm
+```
+
+## 📊 Reference Genome Preparation
+
+### Build STAR Index
+
+Download the genome sequence (FASTA) and gene annotation (GTF) files from [GENCODE](https://www.gencodegenes.org).
+
+```bash
+STAR --runMode genomeGenerate \
+     --genomeDir /path/to/star_index \
+     --genomeFastaFiles /path/to/genome.fa \
+     --sjdbGTFfile /path/to/genes.gtf \
+     --sjdbOverhang 100 \
+     --runThreadN 20
+```
+
+The pipeline expects STAR index at `<genomeDir>/star` and GTF at `<genomeDir>/genes/genes.gtf`.
+
+## 🤝 Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+## 📄 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 📧 Contact
+
+For questions, bug reports, or feature requests, please open an issue on GitHub.
+
+---
+
+**Version**: 0.1.0  
+**Last Updated**: 2026-05-25
