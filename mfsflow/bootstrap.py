@@ -85,6 +85,9 @@ def create_barcode_tables(config):
 
 def run_barcode_discovery(config, project, analysis_dir):
     records = build_expected_records(config.get("toolkit_directory", "."))
+    checked = {}
+    for rec in records:
+        checked.setdefault(rec["candidate_type"], set()).add(rec["candidate_id"])
     bcstats_file = os.path.join(analysis_dir, f"{project}.BCstats.txt")
     report_file = os.path.join(barcode_dir(analysis_dir), f"{project}.barcode_discovery.tsv")
     selected, selected_records = discover_barcodes(bcstats_file, records, report_file)
@@ -100,6 +103,11 @@ def run_barcode_discovery(config, project, analysis_dir):
         f"{row['candidate_type']}:{row['candidate_id']}({row['matched_reads']} reads/{row['matched_expected_barcodes']} BCs)"
         for row in selected
     )
+    checked_label = ", ".join(
+        f"{candidate_type}={len(candidate_ids)}"
+        for candidate_type, candidate_ids in sorted(checked.items())
+    )
+    print(f">>> Barcode discovery checked candidate sets: {checked_label}")
     print(f">>> Barcode discovery selected: {selected_label}")
     print(f">>> Barcode discovery report: {report_file}")
     print(f">>> Barcode tables updated: {summary_path}")

@@ -262,7 +262,7 @@ adata = sc.read_10x_mtx(
 ```r
 library(Matrix)
 
-matrix_dir <- "XPRESS_PROCESSING/expression/Sample01.inex.umi"
+matrix_dir <- "XPRESS_PROCESSING/expression"
 counts <- readMM(file.path(matrix_dir, "matrix.mtx.gz"))
 features <- read.delim(file.path(matrix_dir, "features.tsv.gz"), header = FALSE)
 barcodes <- read.delim(file.path(matrix_dir, "barcodes.tsv.gz"), header = FALSE)

@@ -57,31 +57,51 @@ class BarcodeDiscoveryTests(unittest.TestCase):
             with open(summary) as handle:
                 self.assertIn("MANUAL9", handle.read())
 
-    def test_discover_skips_hamming_matches_that_hit_multiple_candidates(self):
+    def test_discover_counts_shared_barcodes_once_per_candidate(self):
         records = [
             {
                 "candidate_type": "manual",
                 "candidate_id": "9",
                 "wellID": "MANUAL9",
-                "barcode": "AAAAAAAAAAAAAAAAAAAA",
+                "barcode": "ACGTACGTACGTACGTAAAA",
                 "barcode_type": "umi",
             },
             {
                 "candidate_type": "manual",
-                "candidate_id": "10",
-                "wellID": "MANUAL10",
-                "barcode": "AAAAAAAAAAAAAAAAAAAT",
+                "candidate_id": "9",
+                "wellID": "MANUAL9",
+                "barcode": "ACGTACGTACGTACGTCCCC",
+                "barcode_type": "internal",
+            },
+            {
+                "candidate_type": "auto",
+                "candidate_id": "1",
+                "wellID": "P1A1",
+                "barcode": "ACGTACGTACGTACGTAAAA",
                 "barcode_type": "umi",
+            },
+            {
+                "candidate_type": "auto",
+                "candidate_id": "1",
+                "wellID": "P1A1",
+                "barcode": "ACGTACGTACGTACGTCCCC",
+                "barcode_type": "internal",
             },
         ]
         with tempfile.TemporaryDirectory() as tmpdir:
             bcstats = os.path.join(tmpdir, "sample.BCstats.txt")
             with open(bcstats, "w") as handle:
-                handle.write("AAAAAAAAAAAAAAAAAAAG\t100\n")
+                handle.write("ACGTACGTACGTACGTAAAA\t100\n")
+                handle.write("ACGTACGTACGTACGTCCCC\t80\n")
 
             report = os.path.join(tmpdir, "discovery.tsv")
-            with self.assertRaisesRegex(ValueError, "no confident candidate"):
-                discover_barcodes(bcstats, records, report, min_unique_barcodes=1)
+            selected, _selected_records = discover_barcodes(bcstats, records, report, min_unique_barcodes=1)
+            self.assertIn(("manual", "9"), [(x["candidate_type"], x["candidate_id"]) for x in selected])
+
+            with open(report) as handle:
+                report_text = handle.read()
+            self.assertIn("manual\t9\t180", report_text)
+            self.assertIn("auto\t1\t180", report_text)
 
 
 if __name__ == "__main__":

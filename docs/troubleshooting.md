@@ -94,7 +94,7 @@ Error: Cannot find bundled STAR in software/ directory
    ```
 
 4. **Use system-installed tools** (fallback):
-   Install tools via Conda (see [Installation Guide](installation.md#optional-install-system-dependencies-separately))
+   Install tools via Conda or system package manager (see [Installation Guide](installation.md))
 
 ### Issue: Python dependencies installation fails
 
