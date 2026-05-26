@@ -25,6 +25,102 @@ ${plotly_loader_tag}
         --warning-bg: #fffbeb;
         --danger-bg: #fef2f2;
     }
+    .dark {
+        --bg: #0f172a;
+        --panel: #1e293b;
+        --text: #f1f5f9;
+        --text-secondary: #cbd5e1;
+        --muted: #64748b;
+        --line: #334155;
+        --primary: #3b82f6;
+        --primary-light: #60a5fa;
+        --primary-bg: #1e3a5f;
+        --blue: #60a5fa;
+        --green: #34d399;
+        --amber: #fbbf24;
+        --red: #f87171;
+        --purple: #a78bfa;
+        --success-bg: #064e3b;
+        --warning-bg: #451a03;
+        --danger-bg: #450a0a;
+    }
+    .dark body,
+    .dark .shell { color-scheme: dark; }
+    .dark .hero {
+        box-shadow: 0 4px 24px rgba(0, 0, 0, 0.5);
+    }
+    .dark .card,
+    .dark .panel {
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+    }
+    .dark .card:hover {
+        box-shadow: 0 4px 16px rgba(59, 130, 246, 0.15);
+    }
+    .dark .plot {
+        border-color: #334155;
+    }
+    .dark .plot:hover {
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    }
+    .dark th {
+        background: #1e293b;
+    }
+    .dark tbody tr:nth-child(even) td { background: #1a2332; }
+    .dark tbody tr:hover td { background: #1e3a5f; }
+    .dark .table-wrap {
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+    }
+    .dark .stats-table-wrap th:first-child { background: #1e293b; }
+    .dark .stats-table-wrap tbody tr:nth-child(even) td { background: #1a2332; }
+    .dark select, .dark input {
+        background: #1e293b;
+        color: #f1f5f9;
+        border-color: #334155;
+    }
+    .dark select:hover, .dark input:hover {
+        border-color: #475569;
+    }
+    .dark .btn {
+        background: #1e293b;
+        color: #f1f5f9;
+        border-color: #334155;
+    }
+    .dark .btn:hover {
+        background: #334155;
+        border-color: #475569;
+        color: #60a5fa;
+    }
+    .dark .page-btn {
+        background: #1e293b;
+        color: #f1f5f9;
+        border-color: #334155;
+    }
+    .dark .page-btn:hover {
+        background: #334155;
+        border-color: #475569;
+    }
+    .dark .page-btn.active {
+        background: #3b82f6;
+        border-color: #3b82f6;
+    }
+    .dark .toolbar {
+        background: #1e293b;
+        border-color: #334155;
+    }
+    .dark pre {
+        background: #1e293b;
+        color: #e2e8f0;
+        border-color: #334155;
+    }
+    .dark summary:hover {
+        color: #60a5fa;
+    }
+    .dark footer {
+        border-top-color: #334155;
+    }
+    .dark h2 {
+        border-bottom-color: #334155;
+    }
     * { box-sizing: border-box; margin: 0; }
     body {
         background: var(--bg);
@@ -408,6 +504,237 @@ ${plotly_loader_tag}
         background: var(--primary-light);
     }
     
+    /* Back to Top Button */
+    .back-to-top {
+        position: fixed;
+        bottom: 24px;
+        right: 24px;
+        width: 44px;
+        height: 44px;
+        background: var(--primary);
+        color: white;
+        border: none;
+        border-radius: 50%;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 4px 12px rgba(30, 64, 175, 0.3);
+        transition: all 0.3s ease;
+        opacity: 0;
+        visibility: hidden;
+        z-index: 1000;
+    }
+    .back-to-top.visible {
+        opacity: 1;
+        visibility: visible;
+    }
+    .back-to-top:hover {
+        background: var(--primary-light);
+        transform: translateY(-2px);
+    }
+    .back-to-top svg {
+        width: 20px;
+        height: 20px;
+    }
+    
+    .dark .loading-overlay {
+        background: rgba(15, 23, 42, 0.9) !important;
+    }
+    .dark .chart-fullscreen {
+        background: #1e293b !important;
+    }
+    .dark .chart-fullscreen-header {
+        border-bottom-color: #334155 !important;
+    }
+    .dark .chart-fullscreen-title {
+        color: #f1f5f9 !important;
+    }
+    .dark .chart-fullscreen-close {
+        background: #334155 !important;
+        border-color: #475569 !important;
+        color: #cbd5e1 !important;
+    }
+    .dark .chart-fullscreen-close:hover {
+        background: #475569 !important;
+        border-color: #60a5fa !important;
+        color: #60a5fa !important;
+    }
+    
+    /* Loading Overlay */
+    .loading-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(255, 255, 255, 0.9);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        z-index: 2000;
+        transition: opacity 0.3s ease;
+    }
+    .loading-spinner {
+        width: 48px;
+        height: 48px;
+        border: 4px solid #f1f5f9;
+        border-top: 4px solid var(--primary);
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+    }
+    .loading-text {
+        margin-top: 16px;
+        color: var(--text-secondary);
+        font-size: 14px;
+        font-weight: 500;
+    }
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+    
+    /* Chart Fullscreen */
+    .chart-fullscreen {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: white;
+        z-index: 1500;
+        padding: 20px;
+        display: flex;
+        flex-direction: column;
+    }
+    .chart-fullscreen-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 16px;
+        padding-bottom: 16px;
+        border-bottom: 1px solid var(--line);
+    }
+    .chart-fullscreen-title {
+        font-size: 18px;
+        font-weight: 600;
+        color: var(--text);
+    }
+    .chart-fullscreen-close {
+        background: none;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 8px 16px;
+        cursor: pointer;
+        font-size: 14px;
+        color: var(--text-secondary);
+        transition: all 0.15s ease;
+    }
+    .chart-fullscreen-close:hover {
+        background: #f8fafc;
+        border-color: var(--primary-light);
+        color: var(--primary);
+    }
+    .chart-fullscreen-container {
+        flex: 1;
+        min-height: 0;
+    }
+    
+    /* Print Styles */
+    @media print {
+        body {
+            background: white !important;
+            color: black !important;
+        }
+        .shell {
+            max-width: 100% !important;
+            padding: 0 !important;
+            margin: 0 !important;
+        }
+        .hero {
+            background: white !important;
+            color: black !important;
+            box-shadow: none !important;
+            border: 2px solid #000 !important;
+            border-radius: 8px !important;
+            print-color-adjust: exact;
+            -webkit-print-color-adjust: exact;
+        }
+        .hero h1 {
+            color: black !important;
+        }
+        .hero .sub {
+            opacity: 1 !important;
+            color: #333 !important;
+        }
+        .mode-chip {
+            background: #f0f0f0 !important;
+            color: #333 !important;
+            border-color: #999 !important;
+        }
+        .badge {
+            background: #f0f0f0 !important;
+            color: #333 !important;
+            border-color: #999 !important;
+        }
+        .panel {
+            box-shadow: none !important;
+            border: 1px solid #ccc !important;
+            break-inside: avoid;
+            page-break-inside: avoid;
+        }
+        .card {
+            box-shadow: none !important;
+            border: 1px solid #ccc !important;
+            break-inside: avoid;
+            page-break-inside: avoid;
+        }
+        .plot {
+            height: auto !important;
+            min-height: 300px !important;
+            break-inside: avoid;
+            page-break-inside: avoid;
+        }
+        .table-wrap {
+            overflow: visible !important;
+            break-inside: avoid;
+            page-break-inside: avoid;
+        }
+        .stats-table-wrap {
+            max-height: none !important;
+            overflow: visible !important;
+        }
+        .pagination {
+            display: none !important;
+        }
+        .back-to-top {
+            display: none !important;
+        }
+        .loading-overlay {
+            display: none !important;
+        }
+        .btn {
+            display: none !important;
+        }
+        input, select {
+            display: none !important;
+        }
+        footer {
+            border-top: 1px solid #ccc !important;
+            margin-top: 20px !important;
+            padding-top: 10px !important;
+        }
+        details {
+            break-inside: avoid;
+            page-break-inside: avoid;
+        }
+        pre {
+            white-space: pre-wrap !important;
+            word-wrap: break-word !important;
+        }
+    }
+    
     /* Misc */
     details { margin-top: 20px; }
     summary { 
@@ -593,6 +920,19 @@ ${plotly_loader_tag}
     <footer>Generated by MfsFlow</footer>
 </main>
 
+<!-- Back to Top Button -->
+<button class="back-to-top" id="back-to-top" aria-label="返回顶部">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="18 15 12 9 6 15"></polyline>
+    </svg>
+</button>
+
+<!-- Loading Overlay -->
+<div class="loading-overlay" id="loading-overlay">
+    <div class="loading-spinner"></div>
+    <div class="loading-text">加载报告数据中...</div>
+</div>
+
 <script>
 (function() {
     const stats = parseJson('${rna_stats_table_data}', []);
@@ -607,6 +947,14 @@ ${plotly_loader_tag}
     const geneBodyUmi = parseJson('${rna_gene_body_umi_maxnorm}', []);
     const geneBodyInt = parseJson('${rna_gene_body_internal_maxnorm}', []);
     const sequencingQuality = parseJson('${sequencing_quality_summary_data}', []);
+
+    // Dark Mode - auto follow system preference
+    (function() {
+        const mq = window.matchMedia('(prefers-color-scheme: dark)');
+        function apply(dark) { document.body.classList.toggle('dark', dark); }
+        apply(mq.matches);
+        mq.addEventListener('change', function(e) { apply(e.matches); });
+    })();
 
     function parseJson(raw, fallback) {
         try {
@@ -1101,6 +1449,15 @@ ${plotly_loader_tag}
 
         draw();
     }
+    // Hide loading overlay immediately after rendering
+    const loadingOverlay = document.getElementById('loading-overlay');
+    if (loadingOverlay) {
+        loadingOverlay.style.opacity = '0';
+        setTimeout(function() {
+            loadingOverlay.style.display = 'none';
+        }, 300);
+    }
+    
     renderCards();
     renderSampleOverview();
     renderUmiReadComparison();
@@ -1110,6 +1467,25 @@ ${plotly_loader_tag}
     renderGeneBody();
     renderSequencingQuality();
     renderStatsTable();
+    
+    // Back to top button functionality
+    const backToTopButton = document.getElementById('back-to-top');
+    if (backToTopButton) {
+        window.addEventListener('scroll', function() {
+            if (window.pageYOffset > 300) {
+                backToTopButton.classList.add('visible');
+            } else {
+                backToTopButton.classList.remove('visible');
+            }
+        });
+        
+        backToTopButton.addEventListener('click', function() {
+            window.scrollTo({
+                top: 0,
+                behavior: 'smooth'
+            });
+        });
+    }
 })();
 </script>
 </body>
