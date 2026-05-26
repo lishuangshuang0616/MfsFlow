@@ -166,12 +166,10 @@ ${plotly_loader_tag}
     .quality-inline { 
         display: flex; 
         flex-wrap: wrap; 
-        gap: 12px 40px; 
-        margin-top: 12px; 
-        padding: 16px 20px;
-        background: #f8fafc;
-        border-radius: 10px;
-        border: 1px solid #f1f5f9;
+        gap: 8px 24px; 
+        margin-top: 8px; 
+        padding: 10px 16px;
+        border-radius: 8px;
     }
     .quality-item { 
         display: inline-flex; 
@@ -180,15 +178,15 @@ ${plotly_loader_tag}
         font-size: 13px; 
     }
     .quality-item .qv { 
-        font-weight: 700; 
-        font-size: 18px; 
-        color: var(--primary);
+        font-weight: 600; 
+        font-size: 13px; 
+        color: var(--text-secondary);
         font-variant-numeric: tabular-nums;
     }
     .quality-item .ql { 
         color: var(--muted); 
         font-size: 12px; 
-        font-weight: 500;
+        font-weight: 400;
     }
     
     /* Typography */
@@ -282,6 +280,8 @@ ${plotly_loader_tag}
     }
     .page-btn[disabled] { opacity: 0.4; cursor: not-allowed; }
     
+    .summary-table tbody tr:nth-child(even) td { background: transparent; }
+    
     /* Tables */
     th.sortable { cursor: pointer; user-select: none; }
     th.sortable:hover { background: #f1f5f9; }
@@ -365,6 +365,51 @@ ${plotly_loader_tag}
         font-style: italic;
     }
     
+    /* Toggle Switch */
+    .toggle {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 13px;
+        color: var(--text-secondary);
+        cursor: pointer;
+        user-select: none;
+    }
+    .toggle input { display: none; }
+    .toggle .track {
+        width: 32px;
+        height: 18px;
+        background: #cbd5e1;
+        border-radius: 9px;
+        position: relative;
+        transition: background 0.2s ease;
+    }
+    .toggle .track::after {
+        content: '';
+        position: absolute;
+        top: 2px;
+        left: 2px;
+        width: 14px;
+        height: 14px;
+        background: #fff;
+        border-radius: 50%;
+        transition: transform 0.2s ease;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+    }
+    .toggle input:checked + .track {
+        background: var(--primary);
+    }
+    .toggle input:checked + .track::after {
+        transform: translateX(14px);
+    }
+    .toggle:hover .track {
+        background: #94a3b8;
+    }
+    .toggle input:checked + .track:hover {
+        background: var(--primary-light);
+    }
+    
     /* Misc */
     details { margin-top: 20px; }
     summary { 
@@ -437,7 +482,6 @@ ${plotly_loader_tag}
                         <th>Median genes (reads)</th>
                         <th>Median UMIs</th>
                         <th>Median mapping</th>
-                        <th>Median UMI fraction</th>
                         <th>Median Exon/Intron ratio</th>
                     </tr>
                 </thead>
@@ -470,7 +514,7 @@ ${plotly_loader_tag}
             <div>
                 <h3>UMI-based</h3>
                 <div class="table-wrap">
-                    <table>
+                    <table class="summary-table">
                         <tbody id="umi-summary-body"></tbody>
                     </table>
                 </div>
@@ -478,7 +522,7 @@ ${plotly_loader_tag}
             <div>
                 <h3>Read-based</h3>
                 <div class="table-wrap">
-                    <table>
+                    <table class="summary-table">
                         <tbody id="read-summary-body"></tbody>
                     </table>
                 </div>
@@ -499,8 +543,10 @@ ${plotly_loader_tag}
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
                 <h2 style="margin: 0;">Per-Well QC Distribution</h2>
                 <div style="display: flex; gap: 10px; align-items: center;">
-                    <label style="display: inline-flex; align-items: center; gap: 4px; font-size: 13px; color: var(--text-secondary);">
-                        <input type="checkbox" id="metric-logx" checked style="margin: 0;"/> Log Scale
+                    <label class="toggle">
+                        <input type="checkbox" id="metric-logx" checked/>
+                        <span class="track"></span>
+                        Log Scale
                     </label>
                     <label style="display: inline-flex; align-items: center; gap: 4px; font-size: 13px; color: var(--text-secondary);">
                         Metric
@@ -681,7 +727,7 @@ ${plotly_loader_tag}
         const body = el('plate-overview-body');
         if (!body) return;
         if (!plateSummary.length) {
-            body.innerHTML = '<tr><td colspan="9" class="muted">No plate summary data</td></tr>';
+            body.innerHTML = '<tr><td colspan="8" class="muted">No plate summary data</td></tr>';
             return;
         }
         const rowsByPlate = {};
@@ -715,7 +761,6 @@ ${plotly_loader_tag}
                 '<td class="numeric">' + fmtInt(medianReadGenes ?? row.median_read_genes) + '</td>' +
                 '<td class="numeric">' + fmtInt(row.median_umis) + '</td>' +
                 '<td class="numeric">' + fmtPct(medianOfPlate(plate, 'mappingratio')) + '</td>' +
-                '<td class="numeric">' + fmtPct(medianOfPlate(plate, 'umifrac')) + '</td>' +
                 '<td class="numeric">' + fmtPct(medianInExAll(plate)) + '</td>' +
                 '</tr>';
         }).join('');

@@ -13,9 +13,9 @@ ${plotly_loader_tag}
         --text-secondary: #475569;
         --muted: #94a3b8;
         --line: #e2e8f0;
-        --primary: #0f766e;
-        --primary-light: #14b8a6;
-        --primary-bg: #f0fdfa;
+        --primary: #1e40af;
+        --primary-light: #2563eb;
+        --primary-bg: #eff6ff;
         --blue: #3b82f6;
         --green: #10b981;
         --amber: #f59e0b;
@@ -75,9 +75,9 @@ ${plotly_loader_tag}
         display: inline-flex;
         align-items: center;
         gap: 6px;
-        background: rgba(16, 185, 129, 0.2);
-        border: 1px solid rgba(52, 211, 153, 0.4);
-        color: #a7f3d0;
+        background: rgba(37, 99, 235, 0.2);
+        border: 1px solid rgba(96, 165, 250, 0.4);
+        color: #93c5fd;
         border-radius: 20px;
         padding: 5px 12px;
         font-size: 12px;
@@ -119,7 +119,7 @@ ${plotly_loader_tag}
     .card:hover::before { opacity: 1; }
     .card:hover { 
         border-color: var(--primary-light);
-        box-shadow: 0 4px 16px rgba(15, 118, 110, 0.1);
+        box-shadow: 0 4px 16px rgba(30, 64, 175, 0.1);
         transform: translateY(-1px);
     }
     .card-value { 
@@ -166,12 +166,10 @@ ${plotly_loader_tag}
     .quality-inline { 
         display: flex; 
         flex-wrap: wrap; 
-        gap: 12px 40px; 
-        margin-top: 12px; 
-        padding: 16px 20px;
-        background: #f8fafc;
-        border-radius: 10px;
-        border: 1px solid #f1f5f9;
+        gap: 8px 24px; 
+        margin-top: 8px; 
+        padding: 10px 16px;
+        border-radius: 8px;
     }
     .quality-item { 
         display: inline-flex; 
@@ -180,15 +178,15 @@ ${plotly_loader_tag}
         font-size: 13px; 
     }
     .quality-item .qv { 
-        font-weight: 700; 
-        font-size: 18px; 
-        color: #1e40af;
+        font-weight: 600; 
+        font-size: 13px; 
+        color: var(--text-secondary);
         font-variant-numeric: tabular-nums;
     }
     .quality-item .ql { 
         color: var(--muted); 
         font-size: 12px; 
-        font-weight: 500;
+        font-weight: 400;
     }
     
     /* Typography */
@@ -227,7 +225,7 @@ ${plotly_loader_tag}
     select:focus, input:focus {
         outline: none;
         border-color: var(--primary);
-        box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.1);
+        box-shadow: 0 0 0 3px rgba(30, 64, 175, 0.1);
     }
     
     /* Buttons */
@@ -282,6 +280,8 @@ ${plotly_loader_tag}
     }
     .page-btn[disabled] { opacity: 0.4; cursor: not-allowed; }
     
+    .summary-table tbody tr:nth-child(even) td { background: transparent; }
+    
     /* Tables */
     th.sortable { cursor: pointer; user-select: none; }
     th.sortable:hover { background: #f1f5f9; }
@@ -312,7 +312,7 @@ ${plotly_loader_tag}
     td { font-size: 13px; }
     td.numeric { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
     tbody tr:nth-child(even) td { background: #fafbfc; }
-    tbody tr:hover td { background: #f0fdfa; }
+    tbody tr:hover td { background: #eff6ff; }
     tr.review-row td { background: var(--warning-bg) !important; }
     tr.warn-row td { background: var(--danger-bg) !important; }
     
@@ -361,6 +361,51 @@ ${plotly_loader_tag}
         justify-content: center; 
         min-height: 140px;
         font-style: italic;
+    }
+    
+    /* Toggle Switch */
+    .toggle {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 13px;
+        color: var(--text-secondary);
+        cursor: pointer;
+        user-select: none;
+    }
+    .toggle input { display: none; }
+    .toggle .track {
+        width: 32px;
+        height: 18px;
+        background: #cbd5e1;
+        border-radius: 9px;
+        position: relative;
+        transition: background 0.2s ease;
+    }
+    .toggle .track::after {
+        content: '';
+        position: absolute;
+        top: 2px;
+        left: 2px;
+        width: 14px;
+        height: 14px;
+        background: #fff;
+        border-radius: 50%;
+        transition: transform 0.2s ease;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+    }
+    .toggle input:checked + .track {
+        background: var(--primary);
+    }
+    .toggle input:checked + .track::after {
+        transform: translateX(14px);
+    }
+    .toggle:hover .track {
+        background: #94a3b8;
+    }
+    .toggle input:checked + .track:hover {
+        background: var(--primary-light);
     }
     
     /* Misc */
@@ -448,7 +493,7 @@ ${plotly_loader_tag}
             <div>
                 <h3>UMI-based</h3>
                 <div class="table-wrap">
-                    <table>
+                    <table class="summary-table">
                         <tbody id="umi-summary-body"></tbody>
                     </table>
                 </div>
@@ -456,7 +501,7 @@ ${plotly_loader_tag}
             <div>
                 <h3>Read-based</h3>
                 <div class="table-wrap">
-                    <table>
+                    <table class="summary-table">
                         <tbody id="read-summary-body"></tbody>
                     </table>
                 </div>
@@ -473,8 +518,10 @@ ${plotly_loader_tag}
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
                 <h2 style="margin: 0;">Per-Well QC Distribution</h2>
                 <div style="display: flex; gap: 10px; align-items: center;">
-                    <label style="display: inline-flex; align-items: center; gap: 4px; font-size: 13px; color: var(--text-secondary);">
-                        <input type="checkbox" id="metric-logx" checked style="margin: 0;"/> Log Scale
+                    <label class="toggle">
+                        <input type="checkbox" id="metric-logx" checked/>
+                        <span class="track"></span>
+                        Log Scale
                     </label>
                     <label style="display: inline-flex; align-items: center; gap: 4px; font-size: 13px; color: var(--text-secondary);">
                         Metric
