@@ -1,3 +1,11 @@
+"""
+H5AD file export for standalone script execution.
+
+This module handles export of single-cell data to H5AD format (AnnData),
+including count matrix generation, metadata preparation, and file I/O
+for downstream analysis with Scanpy and other tools.
+"""
+
 import gzip
 import json
 import os

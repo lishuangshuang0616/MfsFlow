@@ -58,6 +58,7 @@ ${plotly_loader_tag}
     }
     .dark .plot {
         border-color: #334155;
+        background: var(--panel);
     }
     .dark .plot:hover {
         box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
@@ -389,7 +390,7 @@ ${plotly_loader_tag}
     table { 
         width: 100%; 
         border-collapse: collapse; 
-        background: #fff; 
+        background: var(--panel); 
         font-variant-numeric: tabular-nums; 
     }
     th, td { 
@@ -398,7 +399,7 @@ ${plotly_loader_tag}
         white-space: nowrap; 
     }
     th { 
-        background: #f8fafc; 
+        background: var(--panel); 
         text-align: left; 
         font-weight: 600;
         font-size: 12px;
@@ -430,8 +431,8 @@ ${plotly_loader_tag}
         z-index: 2;
         background: inherit;
     }
-    .stats-table-wrap th:first-child { z-index: 4; background: #f8fafc; }
-    .stats-table-wrap tbody tr:nth-child(even) td { background: #ffffff; }
+    .stats-table-wrap th:first-child { z-index: 4; background: var(--panel); }
+    .stats-table-wrap tbody tr:nth-child(even) td { background: var(--panel); }
     .table-wrap table { border: 0; }
     .table-wrap th:first-child, .table-wrap td:first-child { border-left: 0; }
     .table-wrap th:last-child, .table-wrap td:last-child { border-right: 0; }
@@ -443,8 +444,9 @@ ${plotly_loader_tag}
         min-height: 320px;
         border: 1px solid #e8edf5;
         border-radius: 10px;
-        background: #ffffff;
+        background: var(--panel);
         padding: 20px;
+        overflow: hidden;
         transition: box-shadow 0.2s ease;
     }
     .plot:hover {

@@ -1,12 +1,24 @@
+"""
+Command-line interface for the MfsFlow analysis pipeline.
+
+This module provides the argument parser and main entry point for the
+MfsFlow analysis pipeline, handling user input, configuration building,
+and pipeline execution.
+"""
+
 import argparse
 import os
 import sys
 
-FILTERING = "Filtering"
-STAGE_ORDER = ("Filtering", "Mapping", "Counting", "Summarising")
+from mfsflow.stages import FILTERING, STAGE_ORDER
 
 
 def build_parser():
+    """Build the command-line argument parser for the MfsFlow pipeline.
+    
+    Returns:
+        argparse.ArgumentParser: Configured argument parser.
+    """
     parser = argparse.ArgumentParser(description="MfsFlow Data Analysis Pipeline")
     parser.add_argument("--fastqs", required=True, help="Directory containing input R1/R2 FASTQ files")
     parser.add_argument("--samplesheet", help="CSV samplesheet for equal-length R1/R2 data")
@@ -26,6 +38,12 @@ def build_parser():
 
 
 def generate_report(config):
+    """Generate the HTML report for the completed pipeline analysis.
+    
+    Args:
+        config (dict): Pipeline configuration dictionary containing project
+            settings and output directory paths.
+    """
     try:
         from datetime import datetime
         from pathlib import Path
@@ -46,6 +64,14 @@ def generate_report(config):
 
 
 def main(argv=None):
+    """Main entry point for the MfsFlow analysis pipeline.
+    
+    Parses command-line arguments, builds configuration, runs pipeline stages,
+    and generates the final HTML report.
+    
+    Args:
+        argv (list, optional): Command-line arguments. Defaults to sys.argv.
+    """
     args = build_parser().parse_args(argv)
 
     import time

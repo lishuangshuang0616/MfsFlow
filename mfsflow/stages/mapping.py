@@ -1,9 +1,25 @@
+"""
+Mapping stage: STAR alignment of filtered and barcode-corrected BAM files.
+
+This module handles the second stage of the pipeline, which aligns
+UMI-tagged and internal-barcode-tagged BAM files to the reference
+genome using STAR, producing aligned BAM files for downstream counting.
+"""
+
 import glob
 import os
 from mfsflow.runtime import log_info
 
 
 def run_mapping_stage(runtime, run_stage_cmd, umi_chunks=None, int_chunks=None):
+    """Execute the mapping stage of the pipeline.
+    
+    Args:
+        runtime (PipelineRuntime): Pipeline runtime configuration.
+        run_stage_cmd (callable): Function to run stage commands with timing.
+        umi_chunks (list, optional): UMI BAM chunk paths.
+        int_chunks (list, optional): Internal barcode BAM chunk paths.
+    """
     project = runtime.project
     analysis_dir = runtime.analysis_dir
     tmp_merge_path = runtime.tmp_merge_path

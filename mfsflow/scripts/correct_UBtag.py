@@ -1,4 +1,12 @@
 #!/usr/bin/env python3
+"""
+UB tag correction for BAM files in standalone script execution.
+
+This module corrects UMI and barcode tags in BAM files, performing
+molecule counting and UMI deduplication for single-cell RNA sequencing
+data processing.
+"""
+
 import os
 import pysam
 import argparse

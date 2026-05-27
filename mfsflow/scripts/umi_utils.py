@@ -1,3 +1,11 @@
+"""
+UMI utility functions for standalone script execution.
+
+This module provides UMI (Unique Molecular Identifier) processing utilities,
+including UMI clustering, deduplication, and analysis for single-cell
+RNA sequencing data processing.
+"""
+
 import itertools
 from collections import Counter
 

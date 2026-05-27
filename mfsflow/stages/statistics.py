@@ -1,9 +1,23 @@
+"""
+Statistics stage: generation of quality metrics and summary statistics.
+
+This module handles the final stage of the pipeline, which computes
+and aggregates quality statistics, generating reports and summary
+metrics for the completed analysis.
+"""
+
 import os
 
 from mfsflow.runtime import remove_path, log_info
 
 
 def run_statistics_stage(runtime, run_stage_cmd):
+    """Execute the statistics stage of the pipeline.
+    
+    Args:
+        runtime (PipelineRuntime): Pipeline runtime configuration.
+        run_stage_cmd (callable): Function to run stage commands with timing.
+    """
     config = runtime.config
     if str(config.get("make_stats", "yes")).lower() not in ["yes", "true"]:
         return

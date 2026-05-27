@@ -1,3 +1,10 @@
+"""
+Barcode correction utilities for standalone script execution.
+
+This module provides functions for correcting barcodes using barcode maps
+and ID maps, enabling accurate cell identification from sequencing data.
+"""
+
 from collections import namedtuple
 import sys
 

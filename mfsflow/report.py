@@ -1,16 +1,25 @@
+"""
+HTML report generation: assembles multi-omics analysis metrics and renders interactive Plotly-based reports.
+
+This module reads pipeline output files, computes summary statistics, and
+generates interactive HTML reports with embedded Plotly charts for
+visualization of sequencing quality, barcode statistics, and expression data.
+"""
+
 import json
 import csv
 import statistics
 import gzip
+import logging
 import shutil
 from pathlib import Path
 from string import Template
 import re
 
+from mfsflow import __version__
 from mfsflow.path_layout import barcode_dir, config_dir, expression_dir, outputs_dir, stats_dir
 
-# Hardcoded version since src/__init__.py might not exist
-__version__ = "1.0.0"
+logger = logging.getLogger(__name__)
 
 _JS_TEMPLATE_PLACEHOLDERS = {
     "id",
@@ -737,7 +746,7 @@ def export_deliverables_to_outs(sample_outdir, outs_dir, project):
                 if _move_file_if_exists(src, dst):
                     moved.append(str(dst))
 
-    print(f"Moved {len(moved)} deliverable file(s)/dir(s) to: {outs_dir}")
+    logger.info(f"Moved {len(moved)} deliverable file(s)/dir(s) to: {outs_dir}")
     return moved
 
 def calculate_summary_metrics(sample_outdir, project=""):
@@ -761,7 +770,7 @@ def calculate_summary_metrics(sample_outdir, project=""):
     }
     
     if not stats_tsv:
-        print("Warning: No stats.tsv found for summary metrics.")
+        logger.warning("No stats.tsv found for summary metrics.")
         return metrics
         
     def to_float(v):
@@ -858,7 +867,7 @@ def calculate_summary_metrics(sample_outdir, project=""):
         if total_genes is not None:
             metrics["rna_total_gene"] = fmt_int(total_genes)
     except Exception as e:
-        print(f"Error calculating summary metrics: {e}")
+        logger.error(f"Error calculating summary metrics: {e}")
         
     return metrics
 
@@ -883,7 +892,7 @@ def get_omics_data(outdir, _sample, config):
             omics_data['rna'] = {'stat': stat, 'plot_dict': {}, 'table': None}
             
         except Exception as e:
-            print(f"Warning: Failed to load RNA report data: {e}")
+            logger.warning(f"Failed to load RNA report data: {e}")
 
     return omics_data
 
@@ -946,7 +955,7 @@ def _process_sequencing_quality_data(sample_outdir, combined_context):
         ]
         combined_context["sequencing_quality_summary_data"] = json.dumps(payload)
     except Exception as e:
-        print(f"Warning: Failed to prepare sequencing quality summary data: {e}")
+        logger.warning(f"Failed to prepare sequencing quality summary data: {e}")
 
 def _process_rna_stats_table_data(sample_outdir, combined_context):
     combined_context['rna_stats_table_data'] = '[]'
@@ -965,7 +974,7 @@ def _process_rna_stats_table_data(sample_outdir, combined_context):
         combined_context["rna_stats_table_data"] = json.dumps(records)
         combined_context["rna_stats_table_available"] = bool(len(records) > 0)
     except Exception as e:
-        print(f"Warning: Failed to prepare RNA stats table data: {e}")
+        logger.warning(f"Failed to prepare RNA stats table data: {e}")
 
 def _process_rna_gene_body_coverage_data(sample_outdir, combined_context):
     combined_context['rna_gene_body_percentile'] = '[]'
@@ -1008,7 +1017,7 @@ def _process_rna_gene_body_coverage_data(sample_outdir, combined_context):
         combined_context["rna_gene_body_all_maxnorm"] = json.dumps(all_vals)
         combined_context["rna_gene_body_coverage_available"] = bool(len(x_vals) > 0 and len(x_vals) == len(umi_vals) == len(internal_vals) == len(all_vals))
     except Exception as e:
-        print(f"Warning: Failed to prepare RNA gene body coverage data: {e}")
+        logger.warning(f"Failed to prepare RNA gene body coverage data: {e}")
 
 def _process_rna_read_distribution_data(sample_outdir, combined_context):
     combined_context['rna_read_distribution_bar_data'] = '{}'
@@ -1082,7 +1091,7 @@ def _process_rna_read_distribution_data(sample_outdir, combined_context):
         combined_context['rna_read_distribution_bar_data'] = json.dumps(bar_payload)
         combined_context['rna_read_distribution_box_data'] = json.dumps(box_payload)
     except Exception as e:
-        print(f"Warning: Failed to prepare RNA read distribution data: {e}")
+        logger.warning(f"Failed to prepare RNA read distribution data: {e}")
 
 def _process_rna_saturation_data(sample_outdir, combined_context):
     """Prepare RNA saturation arrays for plotting"""
@@ -1141,14 +1150,14 @@ def _process_rna_saturation_data(sample_outdir, combined_context):
         except Exception:
             pass
     except Exception as e:
-        print(f"Warning: Failed to prepare RNA saturation arrays: {e}")
+        logger.warning(f"Failed to prepare RNA saturation arrays: {e}")
 
 
 def generate_multi_report(name, outdir, config):
     """
     Generates the HTML analysis report.
     """
-    print(f"Generating HTML report for sample {name} in {outdir}")
+    logger.info(f"Generating HTML report for sample {name} in {outdir}")
     
     sample_outdir = Path(outdir)
     
@@ -1165,9 +1174,9 @@ def generate_multi_report(name, outdir, config):
     template_path, report_mode = _select_report_template(sample_type, sample_outdir, template_dir, config)
     
     if not template_path.exists():
-        print(f"Error: Template not found at {template_path}")
+        logger.error(f"Template not found at {template_path}")
         return
-    print(f"Using report template: {template_path.name} (mode={report_mode}, configured={sample_type or 'unknown'})")
+    logger.info(f"Using report template: {template_path.name} (mode={report_mode}, configured={sample_type or 'unknown'})")
 
     with open(template_path, 'r', encoding='utf-8') as f:
         template_str = f.read()
@@ -1239,12 +1248,12 @@ def generate_multi_report(name, outdir, config):
         with open(out_file, 'w', encoding='utf-8') as f:
             f.write(report_html)
         
-        print(f"HTML report saved to: {out_file}")
-        print("HTML report generation complete.")
+        logger.info(f"HTML report saved to: {out_file}")
+        logger.info("HTML report generation complete.")
     except Exception as e:
-        print(f"Error substituting template: {e}")
+        logger.error(f"Error substituting template: {e}")
     finally:
         try:
             export_deliverables_to_outs(sample_outdir, outs_dir, name)
         except Exception as e:
-            print(f"Warning: Failed to export deliverables to outs: {e}")
+            logger.warning(f"Failed to export deliverables to outs: {e}")

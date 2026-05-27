@@ -1,3 +1,11 @@
+"""
+Pipeline bootstrap: output directory creation, barcode table generation, and barcode discovery.
+
+This module handles the initialization phase of the pipeline, including
+creating the output directory structure, generating barcode tables for
+sample identification, and performing barcode discovery when needed.
+"""
+
 import os
 import shutil
 import sys
@@ -8,6 +16,11 @@ from mfsflow.path_layout import barcode_dir, config_dir, ensure_layout, outputs_
 
 
 def create_output_dirs(config):
+    """Create the output directory structure for the pipeline.
+    
+    Args:
+        config (dict): Pipeline configuration containing out_dir path.
+    """
     out_path = config["out_dir"]
     outs_path = outputs_dir(out_path)
 
@@ -21,6 +34,15 @@ def create_output_dirs(config):
 
 
 def create_barcode_tables(config):
+    """Create barcode tables for sample identification based on sample type.
+    
+    Handles custom, external, discover, manual, and auto sample types,
+    generating appropriate barcode files for the pipeline.
+    
+    Args:
+        config (dict): Pipeline configuration containing sample type
+            and barcode information.
+    """
     sample_type = config["sample"]["sample_type"].lower()
     out_path = config["out_dir"]
     script_path = config.get("toolkit_directory")
@@ -81,6 +103,16 @@ def create_barcode_tables(config):
 
 
 def run_barcode_discovery(config, project, analysis_dir):
+    """Perform barcode discovery from sequencing data.
+    
+    Analyzes barcode statistics to identify the most likely sample type
+    and sample IDs, updating the configuration accordingly.
+    
+    Args:
+        config (dict): Pipeline configuration to update with discovery results.
+        project (str): Project name for file naming.
+        analysis_dir (str): Directory containing analysis results.
+    """
     records = build_expected_records(config.get("toolkit_directory", "."))
     checked = {}
     for rec in records:
@@ -111,5 +143,13 @@ def run_barcode_discovery(config, project, analysis_dir):
 
 
 def process_fastq_inputs(_config):
+    """Process FASTQ input files (placeholder for future implementation).
+    
+    Args:
+        _config (dict): Pipeline configuration (unused in current implementation).
+        
+    Returns:
+        None: Placeholder return value.
+    """
     # The pipeline uses original FASTQ locations directly.
     return None

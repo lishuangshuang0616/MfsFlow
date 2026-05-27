@@ -1,3 +1,11 @@
+"""
+Serialization of pipeline configuration to a YAML run config file with tool path resolution.
+
+This module handles writing the final pipeline configuration to a YAML file,
+resolving tool executable paths and applying custom YAML serialization for
+boolean and None values.
+"""
+
 import copy
 import os
 
@@ -5,6 +13,17 @@ import yaml
 
 
 def write_run_config(config):
+    """Write the pipeline configuration to a YAML run config file.
+    
+    Resolves tool executable paths and serializes the configuration
+    with custom YAML formatting for booleans, None values, and strings.
+    
+    Args:
+        config (dict): Pipeline configuration dictionary.
+        
+    Returns:
+        str: Path to the generated YAML configuration file.
+    """
     run_config = copy.deepcopy(config)
     toolkit_dir = config.get("toolkit_directory") or "."
     run_config["toolkit_directory"] = toolkit_dir
@@ -41,13 +60,6 @@ def write_run_config(config):
     yaml.add_representer(ForceStr, force_str_representer, Dumper=RunConfigDumper)
     yaml.add_representer(bool, bool_representer, Dumper=RunConfigDumper)
     yaml.add_representer(type(None), none_representer, Dumper=RunConfigDumper)
-
-    ds = run_config["counting_opts"].get("downsampling", "0")
-    if isinstance(ds, list):
-        ds = ",".join(map(str, ds))
-    else:
-        ds = str(ds)
-    run_config["counting_opts"]["downsampling"] = ForceStr(ds)
 
     final_yaml_path = os.path.join(config["out_dir"], "config", "run_config.yaml")
     os.makedirs(os.path.dirname(final_yaml_path), exist_ok=True)

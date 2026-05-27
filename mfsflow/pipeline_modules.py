@@ -1,18 +1,39 @@
+"""
+Low-level pipeline utilities for FASTQ splitting, BAM merging, Q30 statistics, and shell command execution.
+
+This module provides utility functions for core pipeline operations including
+FASTQ file splitting, BAM file merging, quality statistics aggregation,
+and shell command execution with error handling.
+"""
+
 import os
 import subprocess
 import yaml
 import glob
+import logging
 import math
 import shlex
 import shutil
 
 from mfsflow.path_layout import stats_dir
 
+logger = logging.getLogger(__name__)
+
 def run_shell_cmd(cmd, step_name, log_file=None):
+    """Execute a shell command with logging and error handling.
+    
+    Args:
+        cmd (str or list): Command to execute.
+        step_name (str): Name of the pipeline step for logging.
+        log_file (str, optional): Path to log file for command output.
+        
+    Raises:
+        Exception: If command fails with non-zero exit code.
+    """
     is_shell = isinstance(cmd, str)
     cmd_str = cmd if is_shell else " ".join(shlex.quote(str(x)) for x in cmd)
 
-    print(f"[{step_name}] Running: {cmd_str}")
+    logger.info(f"[{step_name}] Running: {cmd_str}")
     if log_file:
         with open(log_file, 'a') as f:
             f.write(f"Running: {cmd_str}\n")
@@ -35,13 +56,28 @@ def split_fastq(
     compress_chunks=False,
     split_parts=None,
 ):
-    """
-    Splits FastQ files.
-    Optimizations:
-    1. If multiple files, split them in parallel (using subprocess).
-    2. If seqkit is available, use it (faster than split).
-    3. Fallback to GNU split.
-    4. Handles PE data via fq2_files if provided (using seqkit -1 -2 or fallback).
+    """Split FASTQ files into chunks for parallel processing.
+    
+    Splits input FASTQ files into smaller chunks, using SeqKit when available
+    for better performance, with fallback to GNU split. Supports both SE and PE data.
+    
+    Args:
+        fq_files (str or list): Input FASTQ file(s) for R1.
+        n_threads (int): Number of threads available.
+        lines_per_chunk (int): Number of lines per chunk (for GNU split).
+        out_dir (str): Output directory for split files.
+        project (str): Project name for file naming.
+        pigz_exec (str, optional): Path to pigz executable. Defaults to "pigz".
+        seqkit_exec (str, optional): Path to seqkit executable. Defaults to "seqkit".
+        fq2_files (str or list, optional): Input FASTQ file(s) for R2 (PE mode).
+        compress_chunks (bool, optional): Whether to compress output chunks. Defaults to False.
+        split_parts (int, optional): Number of parts to split into (for SeqKit).
+        
+    Returns:
+        list: List of suffixes for the generated chunk files.
+        
+    Raises:
+        ValueError: If input files are invalid or read lengths mismatch.
     """
     if isinstance(fq_files, str):
         fq_files = [fq_files]
@@ -83,7 +119,7 @@ def split_fastq(
         if len(fq_files) != len(fq2_files):
              raise ValueError(f"Mismatch in R1/R2 file counts: {len(fq_files)} vs {len(fq2_files)}")
     
-    print(
+    logger.info(
         f"Splitting {len(fq_files)} files ({mode}). "
         f"Method: {'SeqKit' if has_seqkit else 'GNU Split'}. "
         f"Parts: {split_parts}. Parallel Jobs: {num_concurrent_jobs}. "
@@ -227,7 +263,7 @@ def split_fastq(
         name = os.path.basename(job['file1'])
         if job['mode'] == "PE":
             name += f" & {os.path.basename(job['file2'])}"
-        print(f"  [Split {job_idx+1}/{len(jobs)}] {name}")
+        logger.info(f"  [Split {job_idx+1}/{len(jobs)}] {name}")
         p = subprocess.Popen(job['cmd'], shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         return p
 
@@ -318,13 +354,11 @@ def split_fastq(
                 new_suffix = None
                 
                 if job['has_seqkit']:
-                    # Seqkit Pattern: R1.part_001.fq.gz
-                    # We want: R1.fq.part_001.gz
-                    # Check if c_name looks like seqkit output for this file
-                    # input_fname = R1.fq.gz
-                    # Check if c_name contains input_fname parts
-                    
-                    # Hack: split by .part_
+                    # SeqKit outputs files as: {basename}.part_{NNN}.{ext}
+                    # e.g., R1.part_001.fq.gz
+                    # We need to rename to: {base}.part_{NNN}{ext}
+                    # e.g., R1.fq.part_001.gz
+                    # This ensures fqfilter can find chunks by suffix pattern.
                     if ".part_" in c_name:
                         parts = c_name.split(".part_")
                         prefix_part = parts[0] # R1
@@ -433,6 +467,16 @@ def split_fastq(
     return sorted(list(collected_suffixes))
 
 def merge_q30_stats(tmp_dir, project, out_dir):
+    """Merge Q30 statistics from multiple chunk files.
+    
+    Args:
+        tmp_dir (str): Directory containing temporary Q30 stats files.
+        project (str): Project name for file pattern matching.
+        out_dir (str): Output directory for merged statistics.
+        
+    Returns:
+        str or None: Path to merged Q30 stats file, or None if no files found.
+    """
     q30_files = glob.glob(os.path.join(tmp_dir, f"{project}.*.Q30stats.txt"))
     if not q30_files:
         return None
@@ -471,10 +515,17 @@ def merge_q30_stats(tmp_dir, project, out_dir):
 
 
 def merge_bam_stats(tmp_dir, project, out_dir, yaml_file, samtools_exec):
-    """
-    Replaces mergeBAM.sh
-    1. Concatenates BCstats.txt
-    2. Checks read layout (SE/PE) from first BAM and updates YAML.
+    """Merge BAM statistics and detect read layout.
+    
+    Combines barcode statistics from multiple chunk files and determines
+    read layout (SE/PE) from the first BAM file, updating the YAML configuration.
+    
+    Args:
+        tmp_dir (str): Directory containing temporary BAM files and stats.
+        project (str): Project name for file pattern matching.
+        out_dir (str): Output directory for merged statistics.
+        yaml_file (str): Path to YAML configuration file to update.
+        samtools_exec (str): Path to samtools executable.
     """
     
     # 1. Cat stats
@@ -503,7 +554,7 @@ def merge_bam_stats(tmp_dir, project, out_dir, yaml_file, samtools_exec):
     # 2. Check Layout
     bam_files = glob.glob(os.path.join(tmp_dir, f"{project}.*.raw.tagged.bam"))
     if not bam_files:
-        print("No BAM files found to check layout.")
+        logger.info("No BAM files found to check layout.")
         return
 
     first_bam = bam_files[0]
@@ -547,9 +598,9 @@ def merge_bam_stats(tmp_dir, project, out_dir, yaml_file, samtools_exec):
 
                 with open(yaml_file, 'w') as f:
                     yaml.dump(ydata, f, Dumper=RunConfigDumper, default_flow_style=False, sort_keys=False)
-                print(f"Detected Read Layout: {layout}")
+                logger.info(f"Detected Read Layout: {layout}")
         elif proc.returncode not in (0, -15):
             raise RuntimeError(f"samtools view produced no output (rc={proc.returncode}): {stderr.strip()}")
 
     except Exception as e:
-        print(f"Error checking BAM layout: {e}")
+        logger.error(f"Error checking BAM layout: {e}")

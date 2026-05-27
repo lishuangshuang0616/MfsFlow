@@ -253,7 +253,6 @@ filter_cutoffs:
 | `barcodes.automatic` | bool | false | Enable automatic barcode selection |
 | `barcodes.BarcodeBinning` | int | 1 | Hamming distance for barcode binning |
 | `barcodes.nReadsperCell` | int | 1 | Minimum reads per cell barcode |
-| `barcodes.demultiplex` | bool | false | Produce per-cell demultiplexed BAM files |
 
 ### Example
 ```yaml
@@ -262,7 +261,6 @@ barcodes:
   automatic: no          # Manual barcode selection
   BarcodeBinning: 1     # Hamming distance 1
   nReadsperCell: 1      # At least 1 read per cell
-  demultiplex: no        # Don't demultiplex
 ```
 
 ### BarcodeBinning Explanation
@@ -283,12 +281,9 @@ If `barcode_num` is null and `automatic` is false, the pipeline will:
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `counting_opts.introns` | bool | true | Count intronic reads (yes/no) |
-| `counting_opts.downsampling` | string | "0" | Downsampling levels (comma-separated or "0" for adaptive) |
 | `counting_opts.strand` | int | 1 | Strand specificity: 0=unstranded, 1=positively stranded, 2=negatively stranded |
 | `counting_opts.internal_strand` | int | 0 | Strand specificity for internal reads (override) |
 | `counting_opts.Ham_Dist` | int | 1 | Hamming distance for UMI collapsing |
-| `counting_opts.velocyto` | bool | false | Use Velocyto for intron-exon spanning read counting |
-| `counting_opts.primaryHit` | bool | true | Count primary hits of multimapping reads |
 | `counting_opts.twoPass` | bool | false | Perform STAR two-pass mapping |
 | `counting_opts.gene_body_max_reads` | int | 5000000 | Target primary mapped reads for gene body coverage per read source. Reads are selected by stable hash sampling across the whole BAM, so coordinate-sorted BAMs are not biased toward early genomic regions. Use 0 to include all reads. |
 | `counting_opts.gene_body_sample_seed` | int | 42 | Seed for deterministic gene body coverage sampling |
@@ -297,21 +292,11 @@ If `barcode_num` is null and `automatic` is false, the pipeline will:
 ```yaml
 counting_opts:
   introns: yes
-  downsampling: "10000,20000,40000,60000,80000,100000"
   strand: 1
   internal_strand: 0
   Ham_Dist: 1
-  velocyto: no
-  primaryHit: yes
   twoPass: no
 ```
-
-### Downsampling Levels
-- `"0"`: Adaptive downsampling (recommended)
-- Comma-separated list: Fixed downsampling levels
-- Example: `"10000,20000,40000,60000,80000,100000"`
-
-**Note**: Downsampling is used for saturation analysis. More levels = finer saturation curves but longer runtime.
 
 ### Strand Specificity
 - `0`: Unstranded (e.g., Smart-seq2)
@@ -334,7 +319,6 @@ counting_opts:
 | `performance_opts.stream_bc_correction` | bool | true | Enable streaming barcode correction |
 | `performance_opts.tmp_root` | string | null | Temporary root directory (e.g., `/dev/shm`) |
 | `num_threads` | int | 30 | Number of threads to use |
-| `mem_limit` | int | 0 | Memory limit in GB (0 = unlimited) |
 
 ### Command-Line Equivalent
 - `--threads 20` → `num_threads: 20`
@@ -346,7 +330,6 @@ performance_opts:
   stream_bc_correction: true
   tmp_root: null          # or "/dev/shm"
 num_threads: 30
-mem_limit: 0             # 0 = unlimited
 ```
 
 ### Streaming Barcode Correction
@@ -402,17 +385,6 @@ Available stages:
 
 **Use case**: Resume failed runs from the last successful stage.
 
-## Chemistry Configuration
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `chemistry` | string | "MGI" | Sequencing chemistry: "MGI" or "Illumina" |
-
-### Example
-```yaml
-chemistry: MGI
-```
-
 ## Tool Paths
 
 | Parameter | Type | Default | Description |
@@ -454,9 +426,7 @@ reference:
   GTF_file: /path/to/reference/genes/genes.gtf
   additional_STAR_params: "--clip3pAdapterSeq CTGTCTCTTATACACATCT"
 out_dir: /path/to/output
-chemistry: MGI
 num_threads: 30
-mem_limit: 100
 filter_cutoffs:
   BC_filter:
     num_bases: 4
@@ -469,15 +439,11 @@ barcodes:
   automatic: no
   BarcodeBinning: 1
   nReadsperCell: 1
-  demultiplex: no
 counting_opts:
   introns: yes
-  downsampling: "0"
   strand: 1
   internal_strand: 0
   Ham_Dist: 1
-  velocyto: no
-  primaryHit: yes
   twoPass: no
 performance_opts:
   stream_bc_correction: true

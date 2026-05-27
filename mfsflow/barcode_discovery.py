@@ -1,3 +1,11 @@
+"""
+Barcode discovery and expected barcode table generation for sample identification.
+
+This module provides functions to build expected barcode records from manual
+and auto barcode lists, write barcode tables for the pipeline, and perform
+barcode discovery from sequencing data statistics.
+"""
+
 import os
 import collections
 
@@ -5,6 +13,16 @@ import yaml
 
 
 def build_expected_records(script_dir, sample_type=None, sample_ids=None):
+    """Build expected barcode records from manual and/or auto barcode lists.
+    
+    Args:
+        script_dir (str): Directory containing barcode YAML files.
+        sample_type (str, optional): Sample type filter ('manual', 'auto', or None for both).
+        sample_ids (str or list, optional): Sample IDs to filter.
+        
+    Returns:
+        list: List of barcode record dictionaries.
+    """
     records = []
     if sample_type in (None, "manual"):
         records.extend(_manual_records(script_dir, sample_ids if sample_type == "manual" else None))
@@ -14,6 +32,18 @@ def build_expected_records(script_dir, sample_type=None, sample_ids=None):
 
 
 def write_expected_tables(records, config_dir):
+    """Write expected barcode tables for pipeline consumption.
+    
+    Args:
+        records (list): List of barcode record dictionaries.
+        config_dir (str): Directory to write output files.
+        
+    Returns:
+        tuple: Paths to (pipe_path, summary_path).
+        
+    Raises:
+        ValueError: If no records are provided.
+    """
     if not records:
         raise ValueError("No expected barcodes were generated.")
 
@@ -39,6 +69,25 @@ def write_expected_tables(records, config_dir):
 
 
 def discover_barcodes(bcstats_file, records, out_file, max_hamming=1, min_unique_barcodes=2, min_fraction=0.2):
+    """Discover barcode candidates from observed barcode statistics.
+    
+    Compares observed barcodes against expected records, allowing for
+    Hamming distance mismatches, and selects the most confident candidates.
+    
+    Args:
+        bcstats_file (str): Path to barcode statistics file.
+        records (list): List of expected barcode record dictionaries.
+        out_file (str): Path to write discovery report.
+        max_hamming (int, optional): Maximum Hamming distance for matching. Defaults to 1.
+        min_unique_barcodes (int, optional): Minimum unique barcodes for a candidate. Defaults to 2.
+        min_fraction (float, optional): Minimum fraction of reads for a candidate. Defaults to 0.2.
+        
+    Returns:
+        tuple: (selected_candidates, selected_records).
+        
+    Raises:
+        ValueError: If no barcode counts found or no confident candidates.
+    """
     observed = _read_bcstats(bcstats_file)
     if not observed:
         raise ValueError(f"No barcode counts found in {bcstats_file}")

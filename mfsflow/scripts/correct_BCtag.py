@@ -1,3 +1,11 @@
+"""
+BC tag correction for BAM files in standalone script execution.
+
+This module corrects barcode tags in BAM files using barcode maps and ID maps,
+enabling accurate cell identification and UMI deduplication in single-cell
+RNA sequencing data processing.
+"""
+
 import sys
 import os
 try:

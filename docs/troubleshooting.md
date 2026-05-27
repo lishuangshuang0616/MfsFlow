@@ -271,18 +271,7 @@ ERROR: Cannot allocate memory
    mfsflow ... --threads 10  # Reduce from 20
    ```
 
-2. **Set memory limit**:
-   ```yaml
-   mem_limit: 64  # Limit to 64GB
-   ```
-
-3. **Use fewer downsampling levels**:
-   ```yaml
-   counting_opts:
-     downsampling: "50000,100000,200000"  # Fewer levels
-   ```
-
-4. **Use streaming mode** (already default):
+2. **Use streaming mode** (already default):
    ```yaml
    performance_opts:
      stream_bc_correction: true
@@ -408,7 +397,6 @@ ERROR: Output directory already exists: /path/to/output
 - Insufficient threads
 - Slow storage (HDD instead of SSD)
 - Network filesystem latency
-- Too many downsampling levels
 
 **Solution**:
 1. **Increase thread count**:
@@ -420,13 +408,7 @@ ERROR: Output directory already exists: /path/to/output
    - Copy input data to local SSD
    - Use `/dev/shm` for temporary files
 
-3. **Reduce downsampling levels**:
-   ```yaml
-   counting_opts:
-     downsampling: "100000,200000,400000"  # Fewer levels
-   ```
-
-4. **Disable unnecessary outputs**:
+3. **Disable unnecessary outputs**:
    ```yaml
    make_ub_bam: false  # Don't generate UB BAM
    make_h5ad: false     # Don't generate H5AD (generate later if needed)

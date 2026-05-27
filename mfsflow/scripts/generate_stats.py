@@ -1,4 +1,12 @@
 #!/usr/bin/env python3
+"""
+Statistics generation for standalone script execution.
+
+This module generates various statistics and quality metrics from processed
+single-cell RNA sequencing data, including cell counts, UMI distributions,
+and gene expression statistics.
+"""
+
 import sys
 import os
 import yaml

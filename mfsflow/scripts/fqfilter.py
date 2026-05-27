@@ -1,3 +1,11 @@
+"""
+FASTQ filtering and processing for standalone script execution.
+
+This module provides FASTQ file filtering, quality control, and processing
+utilities for single-cell RNA sequencing data, including parallel processing
+and quality-based filtering.
+"""
+
 import sys
 import yaml
 import subprocess

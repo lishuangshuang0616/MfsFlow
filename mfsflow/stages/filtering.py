@@ -1,3 +1,12 @@
+"""
+Filtering stage: FASTQ splitting, quality filtering, and barcode correction.
+
+This module handles the first stage of the pipeline, which includes
+splitting input FASTQ files into chunks, running quality filters,
+performing barcode detection and correction, and preparing BAM chunks
+for downstream mapping.
+"""
+
 import glob
 import gzip
 import math
@@ -11,6 +20,15 @@ from mfsflow.path_layout import barcode_dir, config_dir
 
 
 def estimate_avg_line_len(path, sample_lines=1000):
+    """Estimate average line length from a FASTQ file by sampling.
+    
+    Args:
+        path (str): Path to FASTQ file (optionally gzipped).
+        sample_lines (int, optional): Number of lines to sample. Defaults to 1000.
+        
+    Returns:
+        float: Average line length in bytes.
+    """
     opener = gzip.open if path.endswith(".gz") else open
     total = 0
     n = 0

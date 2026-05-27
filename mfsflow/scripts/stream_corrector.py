@@ -1,3 +1,11 @@
+"""
+Stream correction for BAM files in standalone script execution.
+
+This module provides streaming barcode and UMI correction for BAM files,
+enabling real-time correction of sequencing reads during processing for
+single-cell RNA sequencing data.
+"""
+
 import sys
 import os
 try:

@@ -1,3 +1,11 @@
+"""
+Directory layout helpers for organizing pipeline output directories.
+
+This is a standalone copy of mfsflow.path_layout for use by pipeline scripts
+executed as separate processes. Provides the same directory path construction
+functions used throughout the pipeline.
+"""
+
 import os
 
 

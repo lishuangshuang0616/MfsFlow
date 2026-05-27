@@ -1,4 +1,12 @@
 #!/usr/bin/env python3
+"""
+FeatureCounts execution for standalone script execution.
+
+This module handles execution and processing of featureCounts for gene
+expression quantification, including count matrix generation and
+statistical analysis for single-cell RNA sequencing data.
+"""
+
 import sys
 import os
 import yaml

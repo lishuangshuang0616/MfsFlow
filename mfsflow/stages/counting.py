@@ -1,9 +1,23 @@
+"""
+Counting stage: featureCounts gene quantification and DGE analysis.
+
+This module handles the third stage of the pipeline, which performs
+gene-level quantification using featureCounts and generates digital
+gene expression (DGE) matrices from aligned BAM files.
+"""
+
 import os
 
 from mfsflow.runtime import remove_path, log_info
 
 
 def run_counting_stage(runtime, run_stage_cmd):
+    """Execute the counting stage of the pipeline.
+    
+    Args:
+        runtime (PipelineRuntime): Pipeline runtime configuration.
+        run_stage_cmd (callable): Function to run stage commands with timing.
+    """
     project = runtime.project
     analysis_dir = runtime.analysis_dir
     yaml_file = runtime.yaml_file

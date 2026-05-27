@@ -1,4 +1,12 @@
 #!/usr/bin/env python3
+"""
+Barcode detection and processing for standalone script execution.
+
+This module handles barcode detection from sequencing data, including
+whitelist loading, barcode counting, and statistical analysis for
+quality assessment of single-cell experiments.
+"""
+
 import argparse
 import yaml
 import pandas as pd

@@ -1,3 +1,12 @@
+"""
+Pipeline stage orchestration: loads configuration and executes stages sequentially.
+
+This module provides the main pipeline runner that loads the YAML
+configuration, initializes the runtime environment, and executes
+the pipeline stages (Filtering, Mapping, Counting, Summarising)
+in the correct order based on the user-specified starting stage.
+"""
+
 import os
 import sys
 
@@ -11,11 +20,13 @@ from mfsflow.stages.statistics import run_statistics_stage
 
 
 def run_pipeline_stages(yaml_file):
-    """
-    Orchestrates pipeline stages from a generated run_config.yaml.
-
-    This is intentionally still a compatibility runner. Stage internals will be
-    moved into dedicated modules after the entrypoint has been thinned.
+    """Orchestrate pipeline stages from a generated run_config.yaml.
+    
+    Loads the configuration, initializes the runtime environment, and
+    executes pipeline stages sequentially starting from the specified stage.
+    
+    Args:
+        yaml_file (str): Path to the run configuration YAML file.
     """
     log_info(f"Loading config from {yaml_file}...")
     with open(yaml_file, "r") as handle:

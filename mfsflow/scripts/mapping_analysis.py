@@ -1,4 +1,12 @@
 #!/usr/bin/env python3
+"""
+Mapping analysis for standalone script execution.
+
+This module performs read mapping analysis, including alignment statistics,
+mapping quality assessment, and read distribution analysis for single-cell
+RNA sequencing data processing.
+"""
+
 import sys
 import os
 import glob

@@ -1,14 +1,34 @@
+"""
+Pipeline configuration builder: parses CLI arguments, detects read layout, and resolves reference files.
+
+This module constructs the pipeline configuration from command-line arguments,
+detects read layout (SE/PE), validates input files, and resolves reference
+file paths for the analysis pipeline.
+"""
+
 import copy
 import csv
 from datetime import datetime
 import gzip
 import glob
+import logging
 import os
 
 from mfsflow import constant
 
+logger = logging.getLogger(__name__)
+
 
 def build_base_config(args, script_dir):
+    """Build base pipeline configuration from command-line arguments.
+    
+    Args:
+        args (argparse.Namespace): Parsed command-line arguments.
+        script_dir (str): Directory containing pipeline scripts.
+        
+    Returns:
+        tuple: (config_dict, samplesheet_records).
+    """
     config = copy.deepcopy(constant.DEFAULT_CONFIG)
     config["project"] = args.sample
     config["num_threads"] = args.threads
@@ -48,14 +68,20 @@ def build_base_config(args, script_dir):
 
 
 def configure_reads(config, fastq_pairs, has_samplesheet):
+    """Configure read files and detect read layout.
+    
+    Args:
+        config (dict): Pipeline configuration to update.
+        fastq_pairs (list): List of (R1, R2) FASTQ file paths.
+        has_samplesheet (bool): Whether samplesheet was provided.
+    """
     config["sequence_files"]["file1"]["name"] = ",".join(r1 for r1, _r2 in fastq_pairs)
     config["sequence_files"]["file2"]["name"] = ",".join(r2 for _r1, r2 in fastq_pairs)
 
-    ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    print(f"[{ts}] [INFO] Detecting read lengths...", flush=True)
+    logger.info("Detecting read lengths...")
     len_r1 = get_read_length(fastq_pairs[0][0])
     len_r2 = get_read_length(fastq_pairs[0][1])
-    print(f"[{ts}] [INFO] Detected R1 Length: {len_r1}, R2 Length: {len_r2}", flush=True)
+    logger.info(f"Detected R1 Length: {len_r1}, R2 Length: {len_r2}")
 
     for r1_file, r2_file in fastq_pairs[1:]:
         cur_r1 = get_read_length(r1_file)
@@ -102,6 +128,12 @@ def configure_reads(config, fastq_pairs, has_samplesheet):
 
 
 def configure_reference(config, genome_dir):
+    """Configure reference genome paths.
+    
+    Args:
+        config (dict): Pipeline configuration to update.
+        genome_dir (str): Directory containing reference genome files.
+    """
     genome_dir = os.path.abspath(genome_dir)
     config["reference"]["STAR_index"] = os.path.join(genome_dir, "star")
 
@@ -118,6 +150,17 @@ def configure_reference(config, genome_dir):
 
 
 def get_read_length(fastq_path):
+    """Get the read length from a FASTQ file.
+    
+    Args:
+        fastq_path (str): Path to FASTQ file (optionally gzipped).
+        
+    Returns:
+        int: Read length in bases.
+        
+    Raises:
+        ValueError: If read length cannot be determined.
+    """
     try:
         opener = gzip.open if fastq_path.endswith(".gz") else open
         with opener(fastq_path, "rt") as f:
@@ -131,6 +174,18 @@ def get_read_length(fastq_path):
 
 
 def discover_fastq_pairs(fastqs_dir):
+    """Discover R1/R2 FASTQ pairs in a directory.
+    
+    Args:
+        fastqs_dir (str): Directory containing FASTQ files.
+        
+    Returns:
+        list: List of (R1_path, R2_path) tuples.
+        
+    Raises:
+        NotADirectoryError: If directory doesn't exist.
+        FileNotFoundError: If no pairs found or missing R2 files.
+    """
     fastqs_dir = os.path.abspath(fastqs_dir)
     if not os.path.isdir(fastqs_dir):
         raise NotADirectoryError(f"FASTQ directory not found: {fastqs_dir}")
@@ -183,6 +238,18 @@ def _guess_r2_path(r1, candidates):
 
 
 def load_samplesheet(samplesheet, fastqs_dir):
+    """Load samplesheet CSV and validate FASTQ paths.
+    
+    Args:
+        samplesheet (str): Path to samplesheet CSV file.
+        fastqs_dir (str): Directory containing FASTQ files.
+        
+    Returns:
+        list: List of sample record dictionaries.
+        
+    Raises:
+        ValueError: If samplesheet is invalid or has missing records.
+    """
     if not samplesheet:
         return []
     samplesheet = os.path.abspath(samplesheet)
@@ -227,6 +294,14 @@ def _resolve_samplesheet_path(path, fastqs_dir):
 
 
 def load_expected_barcodes(expect_id_file):
+    """Load expected barcode table from TSV file.
+    
+    Args:
+        expect_id_file (str): Path to expected barcode TSV file.
+        
+    Returns:
+        dict: Dictionary mapping well IDs to barcode lists.
+    """
     expected = {}
     with open(expect_id_file) as f:
         for line in f:
@@ -241,6 +316,18 @@ def load_expected_barcodes(expect_id_file):
 
 
 def resolve_samplesheet_barcodes(records, expect_id_file):
+    """Resolve samplesheet barcodes against expected barcode table.
+    
+    Args:
+        records (list): List of sample record dictionaries.
+        expect_id_file (str): Path to expected barcode TSV file.
+        
+    Returns:
+        list: Updated records with well ID and barcode type information.
+        
+    Raises:
+        ValueError: If barcode not found or duplicated.
+    """
     expected = load_expected_barcodes(expect_id_file)
     barcode_lookup = {}
     for well_id, values in expected.items():

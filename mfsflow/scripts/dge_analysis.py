@@ -1,4 +1,12 @@
 #!/usr/bin/env python3
+"""
+Digital gene expression (DGE) analysis for standalone script execution.
+
+This module performs digital gene expression analysis, including count matrix
+generation, UMI deduplication, and expression quantification for single-cell
+RNA sequencing data processing.
+"""
+
 import sys
 import os
 import yaml
