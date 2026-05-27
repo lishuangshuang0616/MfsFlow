@@ -133,15 +133,11 @@ Choose one of the following barcode selection modes:
 # Custom barcode file
 --expectBarcode barcodes.tsv
 
-# Discover barcodes from observed reads
---discoverBarcodes
+# No mode specified → barcode discovery (default)
+# Automatically infers plate/manual barcode set from observed reads
 ```
 
-**Note**: For `--manual`, `--plate`, and `--expectBarcode`, barcode detection is strict. If none of the expected barcodes are observed, the run stops instead of falling back to top-count barcodes. `--discoverBarcodes` compares observed read barcodes against the bundled manual/plate barcode lists with exact/Hamming-1 matching, writes a discovery report, then continues with the inferred barcode set.
-
-**Recommended when unsure**: Use `--discoverBarcodes` if the exact plate/manual barcode
-set is uncertain. It is usually the safest first-pass mode because it reports which
-barcode set was inferred before continuing.
+**Note**: When `--manual`, `--plate`, or `--expectBarcode` is specified, barcode detection is strict — if none of the expected barcodes are observed, the run stops. When no mode is specified, the pipeline automatically runs barcode discovery: it compares observed read barcodes against the bundled manual/plate barcode lists with exact/Hamming-1 matching, writes a discovery report, then continues with the inferred barcode set.
 
 ## 📖 Documentation
 

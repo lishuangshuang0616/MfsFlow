@@ -52,7 +52,8 @@ def build_base_config(args, script_dir):
         if not os.path.exists(args.expectBarcode):
             raise FileNotFoundError(f"Custom barcode file not found: {args.expectBarcode}")
         config["barcodes"]["barcode_file"] = os.path.abspath(args.expectBarcode)
-    elif args.discoverBarcodes:
+    else:
+        # Default: discover mode — infer plate/manual barcode set from reads
         config["sample"]["sample_type"] = "discover"
         config["sample"]["sample_id"] = "discover"
 

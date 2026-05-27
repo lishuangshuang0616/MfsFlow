@@ -166,7 +166,7 @@ def cell_bc_selection(bccount_df, config):
         else:
             raise ValueError(
                 "Automatic detection found no overlap with whitelist. "
-                "Check barcode position, --manual/--plate selection, or use --discoverBarcodes."
+                "Check barcode position or --manual/--plate selection."
             )
 
     elif bc_file and not strategy_auto:
@@ -180,7 +180,7 @@ def cell_bc_selection(bccount_df, config):
             raise ValueError(
                 "None of the annotated barcodes were detected. "
                 "The pipeline will not fall back to top barcodes for manual/plate/custom modes; "
-                "check barcode position, --manual/--plate selection, or use --discoverBarcodes."
+                "check barcode position or --manual/--plate selection."
             )
 
     elif bc_num is not None:

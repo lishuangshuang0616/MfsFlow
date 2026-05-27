@@ -142,13 +142,12 @@ mfsflow \
 | `--threads` | No | Number of threads (default: 20) |
 | `--tmpRoot` | No | Temporary root for intermediate files (e.g., `/dev/shm`) |
 | `--stage` | No | Start from specific stage (Filtering/Mapping/Counting/Summarising) |
-| `--plate` | Yes* | Plate ID for automatic barcode mode (mutually exclusive with `--manual`, `--expectBarcode`, `--discoverBarcodes`) |
-| `--manual` | Yes* | Manual barcode IDs (comma-separated, e.g., `"20,21,22"`) |
-| `--expectBarcode` | Yes* | Path to custom barcode file |
-| `--discoverBarcodes` | Yes* | Enable barcode discovery mode |
+| `--plate` | No | Plate ID for automatic barcode mode (mutually exclusive with `--manual`, `--expectBarcode`) |
+| `--manual` | No | Manual barcode IDs (comma-separated, e.g., `"20,21,22"`) (mutually exclusive with `--plate`, `--expectBarcode`) |
+| `--expectBarcode` | No | Path to custom barcode file (mutually exclusive with `--plate`, `--manual`) |
 | `--samplesheet` | No** | CSV samplesheet for equal-length R1/R2 data |
 
-*One of `--plate`, `--manual`, `--expectBarcode`, or `--discoverBarcodes` is required.
+When none of `--plate`, `--manual`, or `--expectBarcode` is specified, the pipeline automatically runs barcode discovery mode, inferring the barcode set from observed reads.
 **Required for equal-length R1/R2 data.
 
 ### Example Commands
@@ -241,14 +240,12 @@ mfsflow \
   --fastqs /data/fastq/Sample04 \
   --genomeDir /ref/human_GRCh38 \
   --sample Sample04 \
-  --discoverBarcodes \
   --outdir /output/Sample04 \
   --threads 20
 ```
 
-`--discoverBarcodes` is recommended when you are not completely sure which plate
-or manual barcode set was used. It writes a discovery report first, then continues
-with the inferred barcode set.
+When no barcode mode is specified, the pipeline automatically runs barcode discovery —
+it infers the barcode set from observed reads, writes a discovery report, then continues.
 
 #### Example 5: Equal-Length R1/R2 with Samplesheet
 ```bash
@@ -317,16 +314,17 @@ Use case: Custom experiments with specific barcode subsets.
 
 Use case: Completely custom barcode designs.
 
-### 4. Barcode Discovery Mode (`--discoverBarcodes`)
+### 4. Barcode Discovery Mode (default)
 
-- Automatically infers barcode set from observed reads
+- Automatically infers barcode set from observed reads (triggered when no `--plate`/`--manual`/`--expectBarcode` is specified)
 - Compares observed barcodes against bundled lists (exact/Hamming-1 matching)
 - Writes discovery report before proceeding
 - Less strict than other modes
 
-Use case: Unknown or complex barcode configurations. This is often the best
-first-pass mode for new datasets because it gives a transparent barcode inference
-report instead of requiring you to guess the plate/manual ID upfront.
+Use case: Unknown or complex barcode configurations, or when you are not sure which
+plate/manual ID to use. This is the default behavior and is often the best first-pass
+mode for new datasets because it gives a transparent barcode inference report instead
+of requiring you to guess the plate/manual ID upfront.
 
 ## Interpreting Reports
 

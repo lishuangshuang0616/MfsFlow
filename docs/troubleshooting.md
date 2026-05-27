@@ -182,9 +182,9 @@ ERROR: None of the expected barcodes were observed in the data.
        sort | uniq -c | sort -rn | head -20
    ```
 
-3. **Use discovery mode**:
+3. **Use discovery mode** (just omit `--plate`/`--manual`/`--expectBarcode`):
    ```bash
-   mfsflow ... --discoverBarcodes
+   mfsflow --fastqs ... --genomeDir ... --sample ...
    ```
 
 ### Issue: Reference genome not found

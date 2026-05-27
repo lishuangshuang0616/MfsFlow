@@ -29,11 +29,10 @@ def build_parser():
     parser.add_argument("--tmpRoot", help="Temporary root for chunk BAM/FASTQ files, e.g. /dev/shm")
     parser.add_argument("--stage", choices=STAGE_ORDER, default=FILTERING, help="Analysis stage to start from")
 
-    mode_group = parser.add_mutually_exclusive_group(required=True)
+    mode_group = parser.add_mutually_exclusive_group()
     mode_group.add_argument("--manual", help='Manual sample IDs (comma separated, e.g. "20,21"). Sets sample_type=manual.')
     mode_group.add_argument("--plate", help='Plate ID (e.g. "1"). Sets sample_type=auto.')
     mode_group.add_argument("--expectBarcode", help="Path to custom barcode file. Sets sample_type=custom.")
-    mode_group.add_argument("--discoverBarcodes", action="store_true", help="Infer plate/manual barcode set from observed reads before barcode detection.")
     return parser
 
 

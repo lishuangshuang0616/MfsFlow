@@ -153,7 +153,7 @@ Barcode binning results (Hamming distance collapsing).
 - `hamming_distance`: Hamming distance between original and binned
 
 ### barcode_discovery_report.tsv
-Barcode discovery results (only in `--discoverBarcodes` mode).
+Barcode discovery results (only when no barcode mode is specified, i.e., discovery mode).
 
 **Purpose**: Documents barcode inference.
 

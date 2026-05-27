@@ -948,7 +948,7 @@ ${plotly_loader_tag}
         internal: '#2563eb',
         warn: '#ea7a20',
         fail: '#dc2626',
-        grid: '#e8edf5'
+        get grid() { return isDarkMode() ? '#334155' : '#e8edf5'; }
     };
     const qcScale = [
         [0, '#440154'],
@@ -958,11 +958,16 @@ ${plotly_loader_tag}
         [0.76, '#9bd93c'],
         [1, '#fde725']
     ];
+    function isDarkMode() {
+        return document.body.classList.contains('dark');
+    }
+    
     function plotLayout(extra) {
+        const dark = isDarkMode();
         return Object.assign({
-            font: { family: 'Inter, -apple-system, BlinkMacSystemFont, "PingFang SC", "Segoe UI", Arial, sans-serif', size: 12, color: '#334155' },
-            plot_bgcolor: '#ffffff',
-            paper_bgcolor: '#ffffff',
+            font: { family: 'Inter, -apple-system, BlinkMacSystemFont, "PingFang SC", "Segoe UI", Arial, sans-serif', size: 12, color: dark ? '#e2e8f0' : '#334155' },
+            plot_bgcolor: dark ? '#1e293b' : '#ffffff',
+            paper_bgcolor: dark ? '#1e293b' : '#ffffff',
             hoverlabel: { bgcolor: '#172033', bordercolor: '#172033', font: { color: '#ffffff' } }
         }, extra || {});
     }
@@ -1129,7 +1134,7 @@ ${plotly_loader_tag}
         const colors = order.map(function(k) { return (readDist.colors || {})[k] || '#94a3b8'; });
         Plotly.newPlot(plot, [{ type: 'bar', x: order, y: values, marker: { color: colors, line: { color: '#ffffff', width: 1 } } }], plotLayout({
             height: 330,
-            margin: { l: 58, r: 28, t: 24, b: 58 },
+            margin: { l: 68, r: 28, t: 24, b: 72 },
             yaxis: { title: '% reads', rangemode: 'tozero', zeroline: false, gridcolor: qcColors.grid },
             xaxis: { automargin: true, gridcolor: qcColors.grid }
         }), { responsive: true, displayModeBar: false });
@@ -1178,7 +1183,7 @@ ${plotly_loader_tag}
                 hovertemplate: '<b>%{text}</b><br>All reads=%{x}<br>' + metricLabel(metric) + '=%{y}<extra></extra>'
             }], plotLayout({
                 height: 330,
-                margin: { l: 68, r: 28, t: 28, b: 68 },
+                margin: { l: 68, r: 28, t: 24, b: 72 },
                 title: { text: metricLabel(metric) + ' by read depth', x: 0.01, xanchor: 'left', y: 0.98, yanchor: 'top' },
                 xaxis: { title: 'All reads', type: logX ? 'log' : 'linear', zeroline: false, automargin: true, gridcolor: qcColors.grid },
                 yaxis: { title: (metric === 'mappingratio' || metric === 'umifrac') ? metricLabel(metric) + ' (%)' : metricLabel(metric), zeroline: false, automargin: true, gridcolor: qcColors.grid }
@@ -1250,10 +1255,10 @@ ${plotly_loader_tag}
         ], plotLayout({
             boxmode: 'group',
             height: 300,
-            margin: { l: 68, r: 68, t: 28, b: 64 },
+            margin: { l: 68, r: 68, t: 24, b: 64 },
             yaxis: { title: 'Genes', zeroline: false, gridcolor: qcColors.grid },
             yaxis2: { title: 'UMIs', overlaying: 'y', side: 'right', zeroline: false },
-            legend: { orientation: 'h', x: .98, y: .98, xanchor: 'right', yanchor: 'top', bgcolor: 'rgba(255,255,255,0.75)' },
+            legend: { orientation: 'h', x: .98, y: .98, xanchor: 'right', yanchor: 'top', bgcolor: isDarkMode() ? 'rgba(30,41,59,0.85)' : 'rgba(255,255,255,0.75)' },
             title: { text: 'UMI-based', x: 0.01, xanchor: 'left', y: 0.98, yanchor: 'top' }
         }), { responsive: true, displayModeBar: false });
         Plotly.newPlot(readPlot, [
@@ -1262,10 +1267,10 @@ ${plotly_loader_tag}
         ], plotLayout({
             boxmode: 'group',
             height: 300,
-            margin: { l: 68, r: 68, t: 28, b: 64 },
+            margin: { l: 68, r: 68, t: 24, b: 64 },
             yaxis: { title: 'Genes', zeroline: false, gridcolor: qcColors.grid },
             yaxis2: { title: 'Reads', overlaying: 'y', side: 'right', zeroline: false },
-            legend: { orientation: 'h', x: .98, y: .98, xanchor: 'right', yanchor: 'top', bgcolor: 'rgba(255,255,255,0.75)' },
+            legend: { orientation: 'h', x: .98, y: .98, xanchor: 'right', yanchor: 'top', bgcolor: isDarkMode() ? 'rgba(30,41,59,0.85)' : 'rgba(255,255,255,0.75)' },
             title: { text: 'Read-based', x: 0.01, xanchor: 'left', y: 0.98, yanchor: 'top' }
         }), { responsive: true, displayModeBar: false });
     }
@@ -1339,11 +1344,11 @@ ${plotly_loader_tag}
         if (medReadSeries.x.length) traces.push({ type: 'scatter', mode: 'lines', x: medReadSeries.x, y: medReadSeries.y, name: 'Median genes (Reads)', yaxis: 'y2', line: { color: qcColors.reads, width: 2.3, dash: 'dot', shape: 'spline', smoothing: 1.08 } });
         Plotly.newPlot(plot, traces, plotLayout({
             height: 390,
-            margin: { l: 68, r: 74, t: 24, b: 72 },
+            margin: { l: 68, r: 62, t: 24, b: 72 },
             xaxis: { title: 'Depth fraction', range: [0, 1], automargin: true, gridcolor: qcColors.grid },
             yaxis: { title: 'Saturation (%)', range: [0, 105], zeroline: false, gridcolor: qcColors.grid },
             yaxis2: { title: 'Median genes (UMIs)', overlaying: 'y', side: 'right', zeroline: false },
-            legend: { orientation: 'v', x: .98, y: .98, xanchor: 'right', yanchor: 'top', bgcolor: 'rgba(255,255,255,0.75)' }
+            legend: { orientation: 'v', x: .98, y: .98, xanchor: 'right', yanchor: 'top', bgcolor: isDarkMode() ? 'rgba(30,41,59,0.85)' : 'rgba(255,255,255,0.75)' }
         }), { responsive: true, displayModeBar: false });
     }
     function renderGeneBody() {
@@ -1356,10 +1361,10 @@ ${plotly_loader_tag}
             { type: 'scatter', mode: 'lines', x: geneBodyX, y: smoothUmi, name: 'UMI', line: { color: qcColors.umi, width: 2.2, shape: 'spline', smoothing: 1.15 } }
         ], plotLayout({
             height: 390,
-            margin: { l: 68, r: 34, t: 24, b: 72 },
+            margin: { l: 68, r: 28, t: 24, b: 72 },
             xaxis: { title: "Gene body percentile (5'->3')", automargin: true, gridcolor: qcColors.grid },
             yaxis: { title: 'Coverage', range: [0, 1.05], zeroline: false, automargin: true, gridcolor: qcColors.grid },
-            legend: { orientation: 'v', x: .98, y: .98, xanchor: 'right', yanchor: 'top', bgcolor: 'rgba(255,255,255,0.75)' }
+            legend: { orientation: 'v', x: .98, y: .98, xanchor: 'right', yanchor: 'top', bgcolor: isDarkMode() ? 'rgba(30,41,59,0.85)' : 'rgba(255,255,255,0.75)' }
         }), { responsive: true, displayModeBar: false });
     }
     function qualityValue(metric) {
