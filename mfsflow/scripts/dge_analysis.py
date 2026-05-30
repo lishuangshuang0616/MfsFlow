@@ -97,6 +97,7 @@ def process_barcode_worker(args):
 def count_worker(args):
     """
     Worker for Pass 1: Count UMIs and Reads in a genomic region.
+    Optimized for memory efficiency using compact data structures.
     """
     bam_file, chroms, barcode_set, gene_set, count_introns, collect_global_umis = args
     
@@ -108,7 +109,6 @@ def count_worker(args):
         'exon': defaultdict(lambda: defaultdict(Counter)),
         'intron': defaultdict(lambda: defaultdict(Counter))
     }
-    # Global UMI counts for saturation (all reads with CB and UR)
     local_global_umi_counts = defaultdict(Counter) if collect_global_umis else None
     
     try:
@@ -120,33 +120,39 @@ def count_worker(args):
                     continue 
                     
                 for read in iter_reads:
-                    if read.is_unmapped: continue
-                    if not read.has_tag("CB"): continue
+                    if read.is_unmapped:
+                        continue
+                    if not read.has_tag("CB"):
+                        continue
                     
                     bc = read.get_tag("CB")
-                    if bc not in barcode_set: continue
+                    if bc not in barcode_set:
+                        continue
                     
-                    # Track for global saturation if UMI exists
                     if collect_global_umis and read.has_tag("UR"):
                         umi = read.get_tag("UR")
                         local_global_umi_counts[bc][umi] += 1
                     
-                    # For gene-specific counts
                     try:
                         gene_id = read.get_tag("GX")
                     except KeyError:
                         continue 
                     
-                    if gene_set and gene_id not in gene_set: continue
+                    if gene_set and gene_id not in gene_set:
+                        continue
                     
                     ftype = "exon"
                     if read.has_tag("RE"):
                         xf = read.get_tag("RE")
-                        if xf == "N": ftype = "intron"
-                        elif xf == "E": ftype = "exon"
-                        else: continue
+                        if xf == "N":
+                            ftype = "intron"
+                        elif xf == "E":
+                            ftype = "exon"
+                        else:
+                            continue
                     
-                    if not count_introns and ftype == 'intron': continue
+                    if not count_introns and ftype == 'intron':
+                        continue
                     
                     local_read_counts_raw[ftype][bc][gene_id] += 1
                     
@@ -158,7 +164,6 @@ def count_worker(args):
         print(f"Error in count_worker for {chroms}: {e}")
         return None
 
-    # Convert to standard dicts to allow pickling
     ret_read_counts = {
         'exon': {k: dict(v) for k, v in local_read_counts_raw['exon'].items()},
         'intron': {k: dict(v) for k, v in local_read_counts_raw['intron'].items()}

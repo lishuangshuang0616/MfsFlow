@@ -49,6 +49,9 @@ ${plotly_loader_tag}
     .dark .hero {
         box-shadow: 0 4px 24px rgba(0, 0, 0, 0.5);
     }
+    .dark .hero-logo {
+        filter: none;
+    }
     .dark .card,
     .dark .panel {
         box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
@@ -142,7 +145,7 @@ ${plotly_loader_tag}
         padding: 28px 32px;
         display: flex;
         justify-content: space-between;
-        align-items: flex-end;
+        align-items: center;
         gap: 24px;
         margin-bottom: 24px;
         box-shadow: 0 4px 24px rgba(15, 118, 110, 0.35);
@@ -182,6 +185,24 @@ ${plotly_loader_tag}
         font-weight: 600;
         margin-bottom: 8px;
         letter-spacing: 0.3px;
+    }
+    .hero-right {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 12px;
+        flex-shrink: 0;
+    }
+    .hero-logo {
+        max-height: 60px;
+        max-width: 200px;
+        object-fit: contain;
+        filter: brightness(0) invert(1);
+        opacity: 0.92;
+        transition: opacity 0.2s ease;
+    }
+    .hero-logo:hover {
+        opacity: 1;
     }
     
     /* Grid System */
@@ -613,6 +634,10 @@ ${plotly_loader_tag}
             color: #333 !important;
             border-color: #999 !important;
         }
+        .hero-logo {
+            filter: none !important;
+            max-height: 64px !important;
+        }
         .badge {
             background: #f0f0f0 !important;
             color: #333 !important;
@@ -727,7 +752,10 @@ ${plotly_loader_tag}
             <h1>${samplename}</h1>
             <div class="sub">RNA library quality control and expression summary</div>
         </div>
-        <div class="badge">MfsFlow v${version}</div>
+        <div class="hero-right">
+            <img class="hero-logo" id="hero-logo" src="${logo_data_uri}" alt="Logo" style="display:none;" onload="this.style.display='block'" />
+            <div class="badge">MfsFlow v${version}</div>
+        </div>
     </section>
 
     <section class="grid cards" id="summary-cards"></section>

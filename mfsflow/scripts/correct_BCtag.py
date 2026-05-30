@@ -37,10 +37,7 @@ def main():
         print(f"Loaded {len(id_map)} ID mappings and {len(internal_bcs)} internal barcodes.")
 
     # Open BAM files
-    try:
-        infile = pysam.AlignmentFile(in_bam, "rb", check_sq=False)
-    except ValueError:
-        infile = pysam.AlignmentFile(in_bam, "rb", check_sq=False)
+    infile = pysam.AlignmentFile(in_bam, "rb", check_sq=False)
 
     # Prepare header
     header = infile.header.to_dict()

@@ -12,6 +12,7 @@ import statistics
 import gzip
 import logging
 import shutil
+import base64
 from pathlib import Path
 from string import Template
 import re
@@ -111,6 +112,82 @@ def _default_placeholder_value(name):
     if name == "rna_saturation":
         return ""
     return ""
+
+
+def _load_logo_data_uri(template_dir):
+    for name in ("logo.png", "logo.svg", "logo.jpg", "logo.jpeg", "logo.ico"):
+        path = template_dir / name
+        if not path.exists():
+            continue
+        ext = path.suffix.lower().lstrip(".")
+        if ext == "svg" or ext == "ico":
+            try:
+                raw = path.read_bytes()
+                mime = f"image/{ext}"
+                return f"data:{mime};base64,{base64.b64encode(raw).decode('ascii')}"
+            except Exception:
+                pass
+            continue
+        compressed = _compress_logo_image(path)
+        if compressed:
+            return compressed
+        try:
+            raw = path.read_bytes()
+            mime = f"image/{'jpeg' if ext == 'jpg' else ext}"
+            return f"data:{mime};base64,{base64.b64encode(raw).decode('ascii')}"
+        except Exception:
+            pass
+    return ""
+
+
+def _compress_logo_image(path):
+    try:
+        from PIL import Image
+        import io
+    except ImportError:
+        return ""
+    try:
+        img = Image.open(path)
+        if img.mode in ("RGBA", "P"):
+            img = img.convert("RGBA")
+        else:
+            img = img.convert("RGB")
+        w, h = img.size
+        if h > 0 and w > 0:
+            aspect = w / h
+            if 0.7 <= aspect <= 1.4:
+                crop_h = h // 2
+                top = (h - crop_h) // 2
+                img = img.crop((0, top, w, top + crop_h))
+                w, h = img.size
+        max_height = 120
+        if h > max_height:
+            ratio = max_height / h
+            img = img.resize((int(w * ratio), max_height), Image.LANCZOS)
+        buf = io.BytesIO()
+        img.save(buf, format="PNG", optimize=True)
+        raw = buf.getvalue()
+        if len(raw) > 8192:
+            buf2 = io.BytesIO()
+            img = img.convert("RGB")
+            img.save(buf2, format="JPEG", quality=70, optimize=True)
+            raw = buf2.getvalue()
+        if len(raw) > 12000:
+            img2 = img.convert("RGB")
+            max_h2 = 80
+            w2, h2 = img2.size
+            if h2 > max_h2:
+                ratio2 = max_h2 / h2
+                img2 = img2.resize((int(w2 * ratio2), max_h2), Image.LANCZOS)
+            buf3 = io.BytesIO()
+            img2.save(buf3, format="JPEG", quality=50, optimize=True)
+            raw = buf3.getvalue()
+            mime = "image/jpeg"
+        else:
+            mime = "image/png"
+        return f"data:{mime};base64,{base64.b64encode(raw).decode('ascii')}"
+    except Exception:
+        return ""
 
 
 def _normalize_stats_record(record):
@@ -1195,6 +1272,7 @@ def generate_multi_report(name, outdir, config):
     combined_context["vdj_t_target_enabled"] = "false"
     combined_context["vdj_b_target_enabled"] = "false"
     combined_context["fastq_display_html"] = ""
+    combined_context["logo_data_uri"] = _load_logo_data_uri(template_dir)
 
     # Add input CSV and config parameters
     combined_context['input_csv_data'] = config.get('csv_content', '')

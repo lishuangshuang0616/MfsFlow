@@ -228,7 +228,6 @@ def calculate_saturation(out_dir, project):
         print("Saturation distribution file not found. Skipping saturation analysis.")
         return None
 
-    # Include a true zero-depth anchor so the reported curves start at the origin.
     fractions = np.array([0.0, 0.01, 0.02, 0.05, 0.08, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0])
 
     def calc_sat_curve(json_file, fractions):
@@ -238,32 +237,37 @@ def calculate_saturation(out_dir, project):
             umi_counts_dist = json.load(f)
         
         if isinstance(umi_counts_dist, dict):
-            umi_counts = np.array([int(k) for k in umi_counts_dist.keys()], dtype=np.int64)
-            umi_freqs = np.array(list(umi_counts_dist.values()), dtype=np.int64)
+            umi_counts = np.array(list(umi_counts_dist.keys()), dtype=np.int64)
+            umi_freqs = np.array(list(umi_counts_dist.values()), dtype=np.float64)
         else:
             umi_counts = np.array(umi_counts_dist, dtype=np.int64)
-            umi_freqs = np.ones_like(umi_counts)
+            umi_freqs = np.ones_like(umi_counts, dtype=np.float64)
 
         total_umi_reads = np.sum(umi_counts * umi_freqs)
-        if total_umi_reads == 0: return np.zeros(len(fractions))
+        if total_umi_reads == 0:
+            return np.zeros(len(fractions))
         
-        exp_reads = fractions * total_umi_reads
-        if umi_counts.size <= 1_000_000:
-            probs = 1.0 - np.power(1.0 - fractions[:, None], umi_counts[None, :])
-            exp_unique = np.sum(probs * umi_freqs[None, :], axis=1)
-            saturation = np.zeros(len(fractions), dtype=np.float64)
-            nonzero = exp_reads > 0
-            saturation[nonzero] = 1.0 - (exp_unique[nonzero] / exp_reads[nonzero])
+        if umi_counts.size <= 2_000_000:
+            probs = 1.0 - np.power(1.0 - fractions[:, np.newaxis], umi_counts[np.newaxis, :])
+            exp_unique = np.dot(probs, umi_freqs)
+            exp_reads = fractions * total_umi_reads
+            saturation = np.where(exp_reads > 0, 1.0 - (exp_unique / exp_reads), 0.0)
             return saturation
 
-        saturation = np.empty(len(fractions), dtype=np.float64)
-        for i, frac in enumerate(fractions):
-            if exp_reads[i] <= 0:
-                saturation[i] = 0.0
-                continue
-            probs = 1.0 - np.power(1.0 - frac, umi_counts)
-            exp_unique = np.sum(probs * umi_freqs)
-            saturation[i] = 1.0 - (exp_unique / exp_reads[i])
+        chunk_size = 100000
+        n_chunks = (umi_counts.size + chunk_size - 1) // chunk_size
+        exp_unique = np.zeros(len(fractions), dtype=np.float64)
+        
+        for i in range(n_chunks):
+            start = i * chunk_size
+            end = min((i + 1) * chunk_size, umi_counts.size)
+            chunk_counts = umi_counts[start:end]
+            chunk_freqs = umi_freqs[start:end]
+            probs = 1.0 - np.power(1.0 - fractions[:, np.newaxis], chunk_counts[np.newaxis, :])
+            exp_unique += np.dot(probs, chunk_freqs)
+        
+        exp_reads = fractions * total_umi_reads
+        saturation = np.where(exp_reads > 0, 1.0 - (exp_unique / exp_reads), 0.0)
         return saturation
 
     print(f"Calculating Library Saturation from {sat_json_global}...")

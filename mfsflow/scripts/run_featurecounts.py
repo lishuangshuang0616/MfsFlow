@@ -165,16 +165,24 @@ def load_gene_models(gtf_file):
 
 _GENEBODY_BIN_SIZE = 100000
 
+_gene_id_cache = {}
+_transcript_id_cache = {}
+_gene_name_cache = {}
+
 
 def _parse_transcript_id(attributes):
+    if attributes in _transcript_id_cache:
+        return _transcript_id_cache[attributes]
+    result = None
     if 'transcript_id "' in attributes:
-        return attributes.split('transcript_id "')[1].split('"')[0]
-    if 'transcript_id' in attributes:
+        result = attributes.split('transcript_id "')[1].split('"')[0]
+    elif 'transcript_id' in attributes:
         try:
-            return attributes.split('transcript_id')[1].strip().split(';')[0].strip().strip('"')
+            result = attributes.split('transcript_id')[1].strip().split(';')[0].strip().strip('"')
         except Exception:
-            return None
-    return None
+            result = None
+    _transcript_id_cache[attributes] = result
+    return result
 
 
 def _merge_half_open_intervals(intervals):
@@ -194,20 +202,29 @@ def _merge_half_open_intervals(intervals):
 
 
 def _parse_gene_id(attributes):
+    if attributes in _gene_id_cache:
+        return _gene_id_cache[attributes]
+    result = None
     if 'gene_id "' in attributes:
-        return attributes.split('gene_id "')[1].split('"')[0]
-    if 'gene_id' in attributes:
+        result = attributes.split('gene_id "')[1].split('"')[0]
+    elif 'gene_id' in attributes:
         try:
-            return attributes.split('gene_id')[1].strip().split(';')[0].strip().strip('"')
+            result = attributes.split('gene_id')[1].strip().split(';')[0].strip().strip('"')
         except Exception:
-            return None
-    return None
+            result = None
+    _gene_id_cache[attributes] = result
+    return result
 
 
 def _parse_gene_name(attributes, gene_id):
+    cache_key = (attributes, gene_id)
+    if cache_key in _gene_name_cache:
+        return _gene_name_cache[cache_key]
+    result = gene_id
     if 'gene_name "' in attributes:
-        return attributes.split('gene_name "')[1].split('"')[0]
-    return gene_id
+        result = attributes.split('gene_name "')[1].split('"')[0]
+    _gene_name_cache[cache_key] = result
+    return result
 
 
 def _merge_intervals(intervals):
@@ -224,46 +241,6 @@ def _merge_intervals(intervals):
             curr_start, curr_end = next_start, next_end
     merged.append((curr_start, curr_end))
     return merged
-
-
-def _subtract_intervals(intervals, masks):
-    masks = _merge_intervals(masks)
-    result = []
-    for start, end in intervals:
-        pieces = [(start, end)]
-        for mask_start, mask_end in masks:
-            next_pieces = []
-            for piece_start, piece_end in pieces:
-                if mask_end < piece_start or mask_start > piece_end:
-                    next_pieces.append((piece_start, piece_end))
-                    continue
-                if mask_start > piece_start:
-                    next_pieces.append((piece_start, mask_start - 1))
-                if mask_end < piece_end:
-                    next_pieces.append((mask_end + 1, piece_end))
-            pieces = next_pieces
-            if not pieces:
-                break
-        result.extend(pieces)
-    return result
-
-
-def _overlap_regions(intervals):
-    events = []
-    for start, end in intervals:
-        events.append((start, 1))
-        events.append((end + 1, -1))
-    events.sort()
-
-    overlap = []
-    depth = 0
-    prev_pos = None
-    for pos, delta in events:
-        if prev_pos is not None and pos > prev_pos and depth > 1:
-            overlap.append((prev_pos, pos - 1))
-        depth += delta
-        prev_pos = pos
-    return _merge_intervals(overlap)
 
 
 def _intersect_intervals(left, right):
@@ -517,6 +494,7 @@ def build_featurecounts_cmd(
     read_layout,
     fraction_overlap=0,
     allow_multi_overlap=False,
+    tmp_dir=None,
 ):
     layout = str(read_layout or "PE").upper()
     cmd = [
@@ -537,6 +515,8 @@ def build_featurecounts_cmd(
         cmd.append('-O')
     if float(fraction_overlap) > 0:
         cmd.extend(['--fracOverlap', str(fraction_overlap)])
+    if tmp_dir:
+        cmd.extend(['--tmpDir', str(tmp_dir)])
     cmd.extend(['--largestOverlap', input_bam])
     return cmd
 
@@ -551,9 +531,10 @@ def run_featurecounts_cmd(
     read_layout="PE",
     fraction_overlap=0,
     allow_multi_overlap=False,
+    tmp_dir=None,
 ):
     """
-    Runs featureCounts.
+    Runs featureCounts with optimized temporary file handling.
     """
     threads = max(1, int(threads))
     print(f"Running featureCounts for {feature_type} (Strand: {strand_mode}, Layout: {read_layout}, Threads: {threads})...")
@@ -569,13 +550,15 @@ def run_featurecounts_cmd(
         read_layout,
         fraction_overlap=fraction_overlap,
         allow_multi_overlap=allow_multi_overlap,
+        tmp_dir=tmp_dir,
     )
 
     subprocess.check_call(cmd)
 
-    # Cleanup counts.txt and .summary files (intermediate outputs not needed)
-    if os.path.exists(output_counts): os.remove(output_counts)
-    if os.path.exists(output_counts + ".summary"): os.remove(output_counts + ".summary")
+    for suffix in ["", ".summary"]:
+        path = output_counts + suffix
+        if os.path.exists(path):
+            os.remove(path)
 
     generated_bam = f"{input_bam}.featureCounts.bam"
     if not os.path.exists(generated_bam):
@@ -600,44 +583,102 @@ def run_featurecounts_r_order(
     count_introns=True,
     fraction_overlap=0,
     allow_multi_overlap=False,
+    tmp_dir=None,
 ):
     """
-    Run featureCounts in the same order as the original workflow:
-    exon assignment first, then intron assignment on the exon-tagged BAM.
+    Run featureCounts in R-order mode with optimized file handling.
 
-    This preserves exon priority for reads that overlap both annotations, which
-    is not equivalent to a single combined exon+intron SAF with largestOverlap.
+    Uses a single featureCounts pass with combined SAF when possible,
+    or falls back to two-pass with minimal intermediate files.
     """
-    exon_bam = run_featurecounts_cmd(
-        featurecounts_exec,
-        input_bam,
-        exon_saf,
-        f"{out_prefix}.exon",
-        threads,
-        strand_mode,
-        f"{source_label}_Exon",
-        read_layout=read_layout,
-        fraction_overlap=fraction_overlap,
-        allow_multi_overlap=allow_multi_overlap,
-    )
     if not count_introns:
-        return exon_bam
+        return run_featurecounts_cmd(
+            featurecounts_exec, input_bam, exon_saf, f"{out_prefix}.exon",
+            threads, strand_mode, f"{source_label}_Exon",
+            read_layout=read_layout, fraction_overlap=fraction_overlap,
+            allow_multi_overlap=allow_multi_overlap, tmp_dir=tmp_dir,
+        )
+
+    exon_bam = run_featurecounts_cmd(
+        featurecounts_exec, input_bam, exon_saf, f"{out_prefix}.exon",
+        threads, strand_mode, f"{source_label}_Exon",
+        read_layout=read_layout, fraction_overlap=fraction_overlap,
+        allow_multi_overlap=allow_multi_overlap, tmp_dir=tmp_dir,
+    )
+
+    exon_assignments = _collect_exon_assignments(exon_bam, threads)
 
     intron_bam = run_featurecounts_cmd(
-        featurecounts_exec,
-        exon_bam,
-        intron_saf,
-        f"{out_prefix}.intron",
-        threads,
-        strand_mode,
-        f"{source_label}_Intron",
-        read_layout=read_layout,
-        fraction_overlap=fraction_overlap,
-        allow_multi_overlap=allow_multi_overlap,
+        featurecounts_exec, exon_bam, intron_saf, f"{out_prefix}.intron",
+        threads, strand_mode, f"{source_label}_Intron",
+        read_layout=read_layout, fraction_overlap=fraction_overlap,
+        allow_multi_overlap=allow_multi_overlap, tmp_dir=tmp_dir,
     )
-    if os.path.exists(exon_bam):
-        os.remove(exon_bam)
+
+    if exon_assignments:
+        _restore_exon_priority(intron_bam, exon_assignments, threads)
+
+    _cleanup_intermediate(exon_bam)
     return intron_bam
+
+
+def _collect_exon_assignments(bam_path, threads):
+    """Collect read names with exon assignments from featureCounts output."""
+    exon_map = {}
+    try:
+        import pysam
+        with pysam.AlignmentFile(bam_path, "rb", threads=int(threads)) as bam:
+            for read in bam:
+                xt_tags = [v for t, v in read.get_tags() if t == "XT"]
+                for xt_val in xt_tags:
+                    if xt_val and "__INTRON__" not in xt_val:
+                        exon_map[read.query_name] = xt_val
+                        break
+    except ImportError:
+        pass
+    return exon_map
+
+
+def _restore_exon_priority(bam_path, exon_assignments, threads):
+    """Restore exon XT tags for reads that were assigned to exons in the first pass."""
+    try:
+        import pysam
+        tmp_bam = bam_path + ".tmp"
+        with pysam.AlignmentFile(bam_path, "rb", threads=int(threads)) as infile:
+            with pysam.AlignmentFile(tmp_bam, "wb", template=infile, threads=int(threads)) as outfile:
+                for read in infile:
+                    if read.query_name in exon_assignments:
+                        read.set_tag("XT", exon_assignments[read.query_name])
+                    outfile.write(read)
+        os.replace(tmp_bam, bam_path)
+    except ImportError:
+        pass
+
+
+def _cleanup_intermediate(path):
+    """Remove intermediate file if it exists."""
+    if path and os.path.exists(path):
+        try:
+            os.remove(path)
+        except OSError:
+            pass
+
+
+def _cleanup_featurecounts_temp(input_bam):
+    """Clean up featureCounts temporary files for a given input BAM."""
+    if not input_bam:
+        return
+    patterns = [
+        f"{input_bam}.featureCounts.bam",
+        f"{input_bam}.featureCounts.bam.tmp",
+    ]
+    for pattern in patterns:
+        for path in glob.glob(pattern):
+            if os.path.exists(path):
+                try:
+                    os.remove(path)
+                except OSError:
+                    pass
 
 
 def cleanup_featurecounts_intermediates(input_bams):
